@@ -15,30 +15,7 @@ class SellerController extends GetxController {
   final RxBool isProductsExpanded = false.obs;
 
   // Mock Orders for UI
-  final RxList<Map<String, dynamic>> orders = <Map<String, dynamic>>[
-    {
-      'id': '#1027',
-      'customer': 'Eje Abraham',
-      'items': 3,
-      'time': '11:54 PM',
-      'amount': 8000.0,
-      'status': 'Unfulfilled',
-      'paymentStatus': 'Payment pending',
-      'type': 'Local Delivery',
-      'date': 'March 1'
-    },
-    {
-      'id': '#1026',
-      'customer': 'Olaniyan Abiodun',
-      'items': 4,
-      'time': '2:12 PM',
-      'amount': 4000.0,
-      'status': 'Archived',
-      'paymentStatus': 'Paid',
-      'type': 'Pickup in store',
-      'date': 'February 12'
-    },
-  ].obs;
+  final RxList<Map<String, dynamic>> orders = <Map<String, dynamic>>[].obs;
 
   @override
   void onInit() {
@@ -71,7 +48,7 @@ class SellerController extends GetxController {
         'Success', 
         'Product "${product.name}" added successfully',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: AppColors.success.withOpacity(0.1),
+        backgroundColor: AppColors.success.withValues(alpha: 0.1),
         colorText: AppColors.success,
       );
     });

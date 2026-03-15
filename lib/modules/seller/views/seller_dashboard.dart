@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/typography.dart';
 import '../../../data/models/product.dart';
 import '../../../routes/app_pages.dart';
+import '../../auth/auth_controller.dart';
 import '../seller_controller.dart';
 
 class SellerDashboard extends GetView<SellerController> {
@@ -36,7 +36,7 @@ class SellerDashboard extends GetView<SellerController> {
                       offset: isMenuTab ? Offset.zero : const Offset(0, -10), // Pull up to meet the curve
                       child: Container(
                         decoration: BoxDecoration(
-                          color: isMenuTab ? Colors.black : Colors.white,
+                          color: isMenuTab ? Colors.black : Colors.white, // Changed from AppColors.background to white
                           borderRadius: isMenuTab 
                             ? BorderRadius.zero 
                             : const BorderRadius.only(
@@ -142,7 +142,7 @@ class SellerDashboard extends GetView<SellerController> {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12), // Increased from 0.08
+            color: Colors.black.withValues(alpha: 0.12), // Increased from 0.08
             blurRadius: 18, // Increased from 15
             offset: const Offset(0, 6), // Slightly deeper offset
           ),
@@ -210,7 +210,7 @@ class SellerDashboard extends GetView<SellerController> {
         height: 44,
         decoration: BoxDecoration(
           color: (isMorphed || controller.currentTabIndex.value == 4 || isSettingsPage)
-              ? Colors.grey.withOpacity(0.15)
+              ? Colors.grey.withValues(alpha: 0.15)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
@@ -311,7 +311,7 @@ class SellerDashboard extends GetView<SellerController> {
               if (controller.currentTabIndex.value == 1)
                 const CircleAvatar(
                   radius: 16,
-                  backgroundColor: Colors.purple,
+                  backgroundColor: AppColors.primary, // Brand Primary
                   child: Text('C', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
               if (!isMenuTab && controller.currentTabIndex.value != 1)
@@ -336,12 +336,12 @@ class SellerDashboard extends GetView<SellerController> {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.25, // Improved from 1.5 to prevent overflow
             children: [
-              _buildMetricCard('Total Sales', '₦12,450.00', Icons.payments_outlined, Colors.blue),
+              _buildMetricCard('Total Sales', '₦12,450.00', Icons.payments_outlined, AppColors.primary),
               _buildMetricCard('Total Orders', '156', Icons.shopping_bag_outlined, Colors.orange),
               _buildMetricCard('Total Products', '42', Icons.inventory_2_outlined, Colors.green),
-              _buildMetricCard('Total Customers', '1,204', Icons.people_outline, Colors.purple),
+              _buildMetricCard('Total Customers', '1,204', Icons.people_outline, Colors.deepPurple),
             ],
           ),
           const SizedBox(height: 24),
@@ -372,35 +372,21 @@ class SellerDashboard extends GetView<SellerController> {
           ),
           const SizedBox(height: 8),
           Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade100),
             ),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildActivityItem(
-                  'New Order Received',
-                  'Order #ORD-2024-001 from Sam Mikky',
-                  '2 mins ago',
-                  Icons.shopping_cart_outlined,
-                  Colors.blue,
-                ),
-                Divider(height: 1, color: Colors.grey.shade100),
-                _buildActivityItem(
-                  'Product Out of Stock',
-                  'Premium Leather Jacket is now out of stock',
-                  '1 hour ago',
-                  Icons.warning_amber_outlined,
-                  Colors.orange,
-                ),
-                Divider(height: 1, color: Colors.grey.shade100),
-                _buildActivityItem(
-                  'Payout Successful',
-                  'A payout of ₦1,200.00 has been processed',
-                  '5 hours ago',
-                  Icons.check_circle_outline,
-                  Colors.green,
+                Icon(Icons.history, size: 48, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  'No recent activities yet',
+                  style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -413,16 +399,15 @@ class SellerDashboard extends GetView<SellerController> {
 
   Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14), // Reduced from 18 to prevent overflow
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(16), // Slightly reduced from 20
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10, // Reduced from 15
+            offset: const Offset(0, 4), // Reduced from 6
           ),
         ],
       ),
@@ -434,21 +419,38 @@ class SellerDashboard extends GetView<SellerController> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(6), // Reduced from 8
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8), // Reduced from 10
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 20), // Reduced from 22
               ),
-              const Icon(Icons.trending_up, color: Colors.green, size: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), // Reduced from 6
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.trending_up, color: Colors.green, size: 10), // Reduced from 12
+                    const SizedBox(width: 2),
+                    Text('+12%', style: AppTypography.bodySmall.copyWith(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 9)), // Reduced from 10
+                  ],
+                ),
+              ),
             ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value, style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-              Text(title, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+              FittedBox( // Added FittedBox to prevent text overflow
+                fit: BoxFit.scaleDown,
+                child: Text(value, style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+              ),
+              const SizedBox(height: 2),
+              Text(title, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontSize: 11)),
             ],
           ),
         ],
@@ -463,53 +465,30 @@ class SellerDashboard extends GetView<SellerController> {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white, // Reverted to original white background
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade100),
+          boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Colors.black87),
+            Icon(icon, size: 20, color: Colors.black87), // Reverted to black icons
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.black87, // Reverted to black text
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildActivityItem(String title, String subtitle, String time, IconData icon, Color color) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(time, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -520,13 +499,35 @@ class SellerDashboard extends GetView<SellerController> {
         _buildFilterBar('Filter orders'),
         _buildStatusChips(['All', 'Unfulfilled', 'Unpaid', 'Open', 'Archived']),
         Expanded(
-          child: ListView.builder(
-            itemCount: controller.orders.length,
-            itemBuilder: (context, index) {
-              final order = controller.orders[index];
-              return _buildOrderItem(order);
-            },
-          ),
+          child: Obx(() {
+            if (controller.orders.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade300),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No orders yet',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'When you receive orders, they will appear here.',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return ListView.builder(
+              itemCount: controller.orders.length,
+              itemBuilder: (context, index) {
+                final order = controller.orders[index];
+                return _buildOrderItem(order);
+              },
+            );
+          }),
         ),
       ],
     );
@@ -683,7 +684,7 @@ class SellerDashboard extends GetView<SellerController> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -748,6 +749,8 @@ class SellerDashboard extends GetView<SellerController> {
           _menuItem(Icons.photo_library, 'Content'),
           _menuItem(Icons.public, 'Markets'),
           _menuItem(Icons.settings, 'Settings', onTap: () => controller.changeTab(6)),
+          const Divider(color: Colors.white24, height: 40),
+          _menuItem(Icons.logout, 'Log out', onTap: () => Get.find<AuthController>().logout()),
           const SizedBox(height: 100), // Space for the floating nav
         ],
       )),
@@ -895,12 +898,12 @@ class SellerDashboard extends GetView<SellerController> {
         width: isStandalone ? 60 : 38, // Slightly reduced widths
         height: isStandalone ? 64 : 44,
         decoration: BoxDecoration(
-          color: isSelected ? Colors.grey.withOpacity(0.15) : (isStandalone ? Colors.white : Colors.transparent),
+          color: isSelected ? Colors.grey.withValues(alpha: 0.15) : (isStandalone ? Colors.white : Colors.transparent),
           shape: BoxShape.circle,
           boxShadow: isStandalone && !isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12), // Increased from 0.08
+                    color: Colors.black.withValues(alpha: 0.12), // Increased from 0.08
                     blurRadius: 12, // Increased from 10
                     offset: const Offset(0, 5), // Slightly deeper offset
                   ),

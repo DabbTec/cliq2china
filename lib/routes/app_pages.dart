@@ -7,8 +7,6 @@ import '../modules/seller/views/seller_dashboard.dart';
 import '../modules/loan/views/loan_dashboard.dart';
 import '../modules/referral/views/referral_view.dart';
 import '../modules/chat/views/chat_view.dart';
-import '../modules/admin/views/admin_dashboard.dart';
-import '../modules/admin/admin_controller.dart';
 import '../modules/onboarding/views/onboarding_view.dart';
 import '../modules/onboarding/onboarding_controller.dart';
 import '../modules/auth/auth_controller.dart';
@@ -88,13 +86,6 @@ class AppPages {
       name: Routes.chat,
       page: () => const ChatView(),
     ),
-    GetPage(
-      name: Routes.adminDashboard,
-      page: () => const AdminDashboard(),
-      binding: BindingsBuilder(() {
-        Get.put(AdminController());
-      }),
-    ),
   ];
 }
 
@@ -110,5 +101,4 @@ abstract class Routes {
   static const loanDashboard = '/loan-dashboard';
   static const referral = '/referral';
   static const chat = '/chat';
-  static const adminDashboard = '/admin-dashboard';
 }

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/typography.dart';
 import '../../auth/auth_controller.dart';
+import '../../auth/views/login_view.dart';
 import '../../../data/models/user.dart';
 import '../../../routes/app_pages.dart';
 
@@ -24,56 +25,7 @@ class BuyerProfileView extends GetView<AuthController> {
   }
 
   Widget _buildAuthGateway() {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.account_circle_outlined, size: 100, color: AppColors.grey300),
-              const SizedBox(height: 24),
-              Text('Your Profile', style: AppTypography.h2),
-              const SizedBox(height: 12),
-              Text(
-                'Log in or sign up to manage your orders, wallet, and loan applications.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Get.toNamed(Routes.login),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Get.toNamed(Routes.signup),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return const LoginView();
   }
 
   Widget _buildProfileContent() {
@@ -90,14 +42,12 @@ class BuyerProfileView extends GetView<AuthController> {
         child: Column(
           children: [
             _buildUserHeader(user),
-            _buildWalletQuickView(),
             _buildMenuSection('Orders & Activity', [
               _menuItem(Icons.list_alt, 'My Orders', 'Track and manage purchases'),
               _menuItem(Icons.favorite_border, 'Wishlist', 'Saved items for later'),
               _menuItem(Icons.rate_review_outlined, 'My Reviews', 'Feedback you\'ve given'),
             ]),
             _buildMenuSection('Financing', [
-              _menuItem(Icons.account_balance_wallet_outlined, 'Wallet', 'Manage your balance'),
               _menuItem(Icons.monetization_on_outlined, 'Loan Dashboard', 'Apply and track loans'),
               _menuItem(Icons.card_giftcard, 'Refer & Earn', 'Invite friends and earn rewards'),
             ]),
@@ -142,40 +92,6 @@ class BuyerProfileView extends GetView<AuthController> {
             ),
           ),
           IconButton(onPressed: () {}, icon: const Icon(Icons.edit_outlined, size: 20)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWalletQuickView() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AppColors.primary, Color(0xFF1565C0)]),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Wallet Balance', style: AppTypography.bodySmall.copyWith(color: Colors.white70)),
-                const SizedBox(height: 4),
-                Text('₦25,400.00', style: AppTypography.h2.copyWith(color: Colors.white)),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Top Up'),
-          ),
         ],
       ),
     );

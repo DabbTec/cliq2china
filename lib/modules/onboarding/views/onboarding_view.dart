@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/typography.dart';
 import '../../../core/widgets/buttons.dart';
@@ -51,17 +50,20 @@ class OnboardingView extends GetView<OnboardingController> {
                           height: 300,
                           width: double.infinity,
                           fit: BoxFit.contain,
-                          fadeInDuration: Duration.zero,
                           fadeOutDuration: Duration.zero,
-                          placeholder: (context, url) => Shimmer.fromColors(
-                            baseColor: Colors.grey[300]!,
-                            highlightColor: Colors.grey[100]!,
-                            child: Container(color: Colors.white),
+                          fadeInDuration: Duration.zero,
+                          httpHeaders: const {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                          },
+                          // No visible loading indicator for a cleaner look
+                          placeholder: (context, url) => const SizedBox(
+                            height: 300,
+                            width: double.infinity,
                           ),
-                          errorWidget: (context, url, error) => const Icon(
-                            Icons.broken_image,
-                            size: 80,
-                            color: AppColors.error,
+                          errorWidget: (context, url, error) => const SizedBox(
+                            height: 300,
+                            width: double.infinity,
+                            child: Icon(Icons.broken_image, size: 80, color: Colors.grey),
                           ),
                         ),
                         const SizedBox(height: 48),

@@ -167,7 +167,7 @@ class _AddProductViewState extends State<AddProductView> {
                           children: [
                             Text(
                               _seoTitleController.text.isEmpty ? 'Product Title' : _seoTitleController.text,
-                              style: const TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w500),
+                              style: const TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w500),
                             ),
                             Text(
                               'https://cliq2china.com/products/${_titleController.text.toLowerCase().replaceAll(' ', '-')}',
@@ -214,7 +214,7 @@ class _AddProductViewState extends State<AddProductView> {
           ),
           if (controller.isLoading.value)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
@@ -241,7 +241,7 @@ class _AddProductViewState extends State<AddProductView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isSelected ? color : AppColors.grey200),
         ),
@@ -271,7 +271,7 @@ class _AddProductViewState extends State<AddProductView> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

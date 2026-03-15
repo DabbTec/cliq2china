@@ -34,14 +34,6 @@ class RoleSelectionView extends GetView<AuthController> {
                 icon: Icons.storefront,
                 onTap: () => controller.selectRole('seller'),
               ),
-              const Spacer(),
-              Center(
-                child: TextButton(
-                  onPressed: () => Get.toNamed('/admin-dashboard'),
-                  child: Text('Admin Dashboard Access (Dev)', 
-                    style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
-                ),
-              ),
             ],
           ),
         ),

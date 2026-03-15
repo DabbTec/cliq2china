@@ -120,8 +120,30 @@ class AuthController extends GetxController {
 
   void selectRole(String role) {
     if (role == 'buyer') {
+      // Mock user login for demo purposes
+      user.value = UserModel(
+        id: 'mock_buyer_id',
+        email: 'buyer@cliq2china.com',
+        name: 'Guest Buyer',
+        role: 'buyer',
+      );
+      
       Get.offAllNamed(Routes.buyerDashboard);
+      
+      // Navigate to profile tab directly
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (Get.isRegistered<BuyerController>()) {
+          Get.find<BuyerController>().currentIndex.value = 3;
+        }
+      });
     } else if (role == 'seller') {
+      // Mock user login for demo purposes
+      user.value = UserModel(
+        id: 'mock_seller_id',
+        email: 'seller@cliq2china.com',
+        name: 'Guest Seller',
+        role: 'seller',
+      );
       Get.offAllNamed(Routes.sellerDashboard);
     }
   }
