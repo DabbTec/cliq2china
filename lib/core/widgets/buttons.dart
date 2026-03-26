@@ -6,12 +6,16 @@ class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
   final bool isLoading;
+  final Color? color;
+  final Color? textColor;
 
   const PrimaryButton({
     super.key,
     required this.text,
     required this.onPressed,
     this.isLoading = false,
+    this.color,
+    this.textColor,
   });
 
   @override
@@ -22,8 +26,8 @@ class PrimaryButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: color ?? AppColors.primary,
+          foregroundColor: textColor ?? Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -38,7 +42,12 @@ class PrimaryButton extends StatelessWidget {
                   strokeWidth: 2,
                 ),
               )
-            : Text(text, style: AppTypography.button),
+            : Text(
+                text,
+                style: AppTypography.button.copyWith(
+                  color: textColor ?? Colors.white,
+                ),
+              ),
       ),
     );
   }

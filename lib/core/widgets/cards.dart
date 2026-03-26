@@ -1,35 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../utils/currency_service.dart';
+import '../../data/models/product.dart';
 
 class ProductCard extends StatelessWidget {
   final String title;
-  final double price;
+  final double price; // Converted price (optional/legacy)
+  final double? originalPriceYuan; // NEW: Base price in Yuan
   final String imageUrl;
   final double rating;
   final VoidCallback onTap;
   final VoidCallback onAddToCart;
-  final double? originalPrice;
+  final VoidCallback? onToggleWishlist;
+  final double? originalPrice; // Original price in local currency (legacy)
   final int? discountPercentage;
-  final String? tag;
-  final bool showChoice; // Added showChoice
-  final bool showSale; // Added showSale
-  final double imageHeight; // Added imageHeight
+  final String? trendingStatus;
+  final bool showSuperDeal;
+  final double imageHeight;
+  final bool isInCart; // Track if product is already in cart
+  final bool isInWishlist;
+  final int stock;
+  final List<MOQTier>? moqTiers; // NEW: MOQ Tiers for price fallback
+  final double? displayPrice; // NEW: Pre-calculated price from backend
+  final double? displayYuan; // NEW: Pre-calculated Yuan from backend
+  final String? displaySymbol; // NEW: Pre-calculated symbol from backend
 
   const ProductCard({
     super.key,
     required this.title,
     required this.price,
+    this.originalPriceYuan,
     required this.imageUrl,
     required this.rating,
     required this.onTap,
     required this.onAddToCart,
+    this.onToggleWishlist,
     this.originalPrice,
     this.discountPercentage,
-    this.tag,
-    this.showChoice = false, // Default false
-    this.showSale = false, // Default false
-    this.imageHeight = 180, // Default height
+    this.trendingStatus,
+    this.showSuperDeal = false,
+    this.imageHeight = 150,
+    this.isInCart = false,
+    this.isInWishlist = false,
+    this.stock = 1,
+    this.moqTiers,
+    this.displayPrice,
+    this.displayYuan,
+    this.displaySymbol,
   });
+
+  double get effectiveYuanPrice {
+    if (originalPriceYuan != null && originalPriceYuan! > 0) {
+      return originalPriceYuan!;
+    }
+    if (moqTiers != null && moqTiers!.isNotEmpty) {
+      return moqTiers!.first.pricePerUnit;
+    }
+    return price;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,206 +69,331 @@ class ProductCard extends StatelessWidget {
         color: Colors.white, // No container border or radius
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // 1. Image Section (Only the image has a border/radius)
             Stack(
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8), // Image border radius
-                    border: Border.all(color: Colors.grey[200]!, width: 0.5), // Image border
+                    borderRadius: BorderRadius.circular(
+                      8.w,
+                    ), // Image border radius
+                    border: Border.all(
+                      color: Colors.grey[200]!,
+                      width: 0.5,
+                    ), // Image border
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(8.w),
                     child: CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
                       width: double.infinity,
-                      height: imageHeight,
+                      height: imageHeight.h,
                       placeholder: (context, url) => Container(
-                        height: imageHeight,
+                        height: imageHeight.h,
                         color: Colors.grey[100],
                       ),
                       errorWidget: (context, url, error) => Container(
-                        height: imageHeight,
+                        height: imageHeight.h,
                         color: Colors.grey[200],
-                        child: const Icon(Icons.broken_image, size: 30),
+                        child: Icon(Icons.broken_image, size: 30.sp),
                       ),
                     ),
                   ),
                 ),
-                // Pill tag
-                if (tag != null)
-                  Positioned(
-                    left: 4,
-                    bottom: 4,
+                if (stock <= 0)
+                  Positioned.fill(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(8.w),
                       ),
-                      child: Text(
-                        tag!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11, // Increased from 9
-                          fontWeight: FontWeight.w900,
+                      child: Center(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 4.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                          child: Text(
+                            'OUT OF STOCK',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (onToggleWishlist != null)
+                  Positioned(
+                    top: 8.h,
+                    right: 8.w,
+                    child: GestureDetector(
+                      onTap: onToggleWishlist,
+                      child: Container(
+                        padding: EdgeInsets.all(4.w),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isInWishlist ? Icons.favorite : Icons.favorite_border,
+                          color: isInWishlist ? Colors.red : Colors.grey,
+                          size: 18.sp,
                         ),
                       ),
                     ),
                   ),
               ],
             ),
-            
+
             // 2. Info Section (No border here)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0), // Increased padding
+              padding: EdgeInsets.symmetric(
+                vertical: 4.h,
+                horizontal: 4.w,
+              ), // Reduced padding from 6.0
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Title with Choice/Sale Beside it
-                  RichText(
+                  // Title
+                  Text(
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    text: TextSpan(
+                    style: TextStyle(
+                      color: const Color(0xFF222222), // Darker for visibility
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.normal,
+                      height: 1.2,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+
+                  SizedBox(height: 4.h),
+
+                  // Trending Status Row + Mini Cart
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          trendingStatus ?? '✨ Recommended',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF444444),
+                            fontSize: 10.sp, // Slightly smaller font
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 4.w),
+                      // Small Cart Button
+                      GestureDetector(
+                        onTap: (isInCart || stock <= 0) ? null : onAddToCart,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(3.w),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: (isInCart || stock <= 0)
+                                      ? Colors.grey.withValues(alpha: 0.5)
+                                      : Colors.black.withValues(alpha: 0.8),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.shopping_cart_outlined,
+                                size: 14.sp,
+                                color: (isInCart || stock <= 0)
+                                    ? Colors.grey
+                                    : Colors.red,
+                              ),
+                            ),
+                            if (isInCart)
+                              Positioned(
+                                top: -4.h,
+                                right: -4.w,
+                                child: Container(
+                                  padding: EdgeInsets.all(2.w),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: BoxConstraints(
+                                    minWidth: 12.w,
+                                    minHeight: 12.h,
+                                  ),
+                                  child: Text(
+                                    '1',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8.sp,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 4.h),
+
+                  // Price Row (Yuan Primary Red + Local Secondary Black)
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        if (showChoice)
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: _buildBadge('Choice', const Color(0xFF1367AF), Colors.white),
+                        if (moqTiers != null && moqTiers!.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(right: 4.w, bottom: 2.h),
+                            child: Text(
+                              'Starting from',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 9.sp,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-                        if (showSale)
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: _buildBadge('Sale', const Color(0xFFFFEBEE), const Color(0xFFE53935)),
+                        Text(
+                          '¥',
+                          style: TextStyle(
+                            color: const Color(0xFFE53935), // Primary Red
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12.sp, // Reduced from 14
+                          ),
+                        ),
+                        Text(
+                          displayYuan != null
+                              ? displayYuan!
+                                    .toStringAsFixed(0)
+                                    .replaceAllMapped(
+                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+                                      (Match m) => "${m[1]},",
+                                    )
+                              : effectiveYuanPrice == 0
+                              ? ''
+                              : effectiveYuanPrice
+                                    .toStringAsFixed(0)
+                                    .replaceAllMapped(
+                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+                                      (Match m) => "${m[1]},",
+                                    ),
+                          style: TextStyle(
+                            color: const Color(0xFFE53935), // Primary Red
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16.sp, // Reduced from 18
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        if (displayYuan != null || effectiveYuanPrice > 0) ...[
+                          SizedBox(width: 4.w), // Reduced from 6
+                          Text(
+                            '≈',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 11.sp, // Reduced from 12
                             ),
                           ),
-                        TextSpan(
-                          text: title,
-                          style: const TextStyle(
-                            color: Color(0xFF222222), // Darker for visibility
-                            fontSize: 14,
-                            fontWeight: FontWeight.normal,
-                            height: 1.2,
-                            fontFamily: 'Inter',
-                          ),
+                        ],
+                        SizedBox(width: 4.w),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              displaySymbol ??
+                                  CurrencyService.to.localCurrencySymbol,
+                              style: TextStyle(
+                                color: Colors.black, // Secondary Black
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.sp,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            if (displayPrice != null)
+                              Text(
+                                displayPrice!
+                                    .toStringAsFixed(
+                                      displayPrice! < 100 ? 2 : 0,
+                                    )
+                                    .replaceAllMapped(
+                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+                                      (Match m) => "${m[1]},",
+                                    ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.black, // Secondary Black
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.sp,
+                                ),
+                              )
+                            else
+                              Obx(() {
+                                // Explicitly access the observable to ensure GetX tracks it
+                                final _ =
+                                    CurrencyService.to.currentLocation.value;
+
+                                if (effectiveYuanPrice == 0) {
+                                  return Container(
+                                    width: 50.w,
+                                    height: 14.h,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(4.r),
+                                    ),
+                                  );
+                                }
+
+                                final localPrice = CurrencyService.to
+                                    .convertFromYuan(effectiveYuanPrice);
+                                return Text(
+                                  localPrice
+                                      .toStringAsFixed(localPrice < 100 ? 2 : 0)
+                                      .replaceAllMapped(
+                                        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+                                        (Match m) => "${m[1]},",
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.black, // Secondary Black
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.sp,
+                                  ),
+                                );
+                              }),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  
-                  const SizedBox(height: 6),
-                  
-                  // Added to cart text
-                  const Text(
-                    '10000+ added to cart',
-                    style: TextStyle(
-                      color: Color(0xFF444444), // Darker
-                      fontSize: 12, // Increased from 10
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 4),
-                  
-                  // Price Row (NGN format + sold count)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      const Text(
-                        'NGN',
-                        style: TextStyle(
-                          color: Color(0xFFD32F2F),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12, // Increased from 10
-                        ),
-                      ),
-                      Text(
-                        price.toStringAsFixed(2).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},"),
-                        style: const TextStyle(
-                          color: Color(0xFFD32F2F),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18, // Increased from 15
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '10K+ sold',
-                        style: TextStyle(
-                          color: Colors.grey[700], // Darker
-                          fontSize: 12, // Increased from 10
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 8),
-                  
-                  // Footer Row (Optional Bundle Deal & Mini Cart)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (tag == 'Choice') // Only show bundle deals for certain items
-                        const Text(
-                          'Bundle deals >',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 13, // Increased from 11
-                            fontWeight: FontWeight.w900,
-                          ),
-                        )
-                      else
-                        const SizedBox.shrink(),
-                      
-                      // Small Cart Button
-                      GestureDetector(
-                        onTap: onAddToCart,
-                        child: Container(
-                          padding: const EdgeInsets.all(4), // Increased from 2
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black.withValues(alpha: 0.8), width: 1.5), // Bolder border
-                            ),
-                          child: const Icon(
-                            Icons.shopping_cart_outlined,
-                            size: 16, // Increased from 12
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+
+                  SizedBox(height: 4.h),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBadge(String text, Color bgColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // Increased padding
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(2),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11, // Increased from 9
-          fontWeight: FontWeight.w900,
         ),
       ),
     );
