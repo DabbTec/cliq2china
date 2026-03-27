@@ -8,6 +8,7 @@ import 'core/utils/currency_service.dart';
 import 'core/services/token_service.dart';
 import 'core/services/api_service.dart';
 import 'core/services/image_upload_service.dart';
+import 'core/services/app_update_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +55,7 @@ class Cliq2ChinaApp extends StatelessWidget {
             Get.put(ApiService());
             Get.put(CurrencyService());
             Get.put(ImageUploadService());
+            Get.put(AppUpdateService());
             Get.put(AuthController());
           }),
           initialRoute: AppPages.initial,

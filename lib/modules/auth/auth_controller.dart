@@ -7,6 +7,7 @@ import '../buyer/buyer_controller.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../core/services/token_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/app_update_service.dart';
 import '../../routes/app_pages.dart';
 
 class AuthController extends GetxController {
@@ -21,6 +22,13 @@ class AuthController extends GetxController {
   void onInit() {
     super.onInit();
     _checkAutoLogin();
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    // Automatically check for updates on startup
+    AppUpdateService.to.checkForUpdates();
   }
 
   Future<void> _checkAutoLogin() async {

@@ -33,6 +33,25 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
   final RxDouble _currentPrice = 0.0.obs;
   final RxInt _selectedQty = 1.obs;
 
+  String _formatPrice(double value) {
+    final absValue = value.abs();
+    final decimals = absValue < 1
+        ? 3
+        : absValue < 100
+        ? 2
+        : 0;
+    return value
+        .toStringAsFixed(decimals)
+        .replaceAllMapped(
+          RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+          (Match m) => "${m[1]},",
+        );
+  }
+
+  String _formatYuan(double yuan) {
+    return _formatPrice(yuan);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -42,8 +61,9 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     if (args != null && args['product'] != null) {
       final ProductModel initialProduct = args['product'] as ProductModel;
       _detailedProduct.value = initialProduct;
-      _currentPrice.value =
-          initialProduct.originalPriceYuan ?? initialProduct.price;
+
+      // Prioritize displayYuan from backend, then fallback to originalPriceYuan or price
+      _currentPrice.value = initialProduct.effectiveYuan;
 
       // Set initial MOQ
       int initialMOQ = 1;
@@ -112,7 +132,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
 
   double _calculatePrice(ProductModel product, int qty) {
     if (product.moqTiers == null || product.moqTiers!.isEmpty) {
-      return product.originalPriceYuan ?? product.price;
+      return product.effectiveYuan;
     }
 
     for (var tier in product.moqTiers!) {
@@ -451,11 +471,13 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Obx(
-                                () =>
-                                    _isLoading.value &&
-                                        _currentPrice.value == 0 &&
-                                        product.displayYuan == null
+                              Obx(() {
+                                final displayYuan =
+                                    (product.displayYuan != null &&
+                                        product.displayYuan! > 0)
+                                    ? product.displayYuan!
+                                    : _currentPrice.value;
+                                return _isLoading.value && displayYuan == 0
                                     ? Container(
                                         width: 80.w,
                                         height: 30.h,
@@ -467,16 +489,16 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                         ),
                                       )
                                     : Text(
-                                        (product.displayYuan ??
-                                                _currentPrice.value)
-                                            .toStringAsFixed(0),
+                                        displayYuan > 0
+                                            ? _formatYuan(displayYuan)
+                                            : '',
                                         style: TextStyle(
                                           color: AppColors.error,
                                           fontSize: 28.sp,
                                           fontWeight: FontWeight.w900,
                                         ),
-                                      ),
-                              ),
+                                      );
+                              }),
                               SizedBox(width: 12.w),
                               Text(
                                 '≈',
@@ -507,8 +529,21 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 // Priority 1: Use pre-calculated display fields from backend
                                 if (product.displayPrice != null &&
                                     product.displaySymbol != null) {
+                                  final displayLocal = product.displayPrice!;
+                                  final symbol = product.displaySymbol!;
+                                  final decimals = displayLocal.abs() < 1
+                                      ? 3
+                                      : displayLocal.abs() < 100
+                                      ? 2
+                                      : 0;
+                                  final formattedLocal = displayLocal
+                                      .toStringAsFixed(decimals)
+                                      .replaceAllMapped(
+                                        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+                                        (Match m) => "${m[1]},",
+                                      );
                                   return Text(
-                                    '${product.displaySymbol} ${product.displayPrice!.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                                    '$symbol $formattedLocal',
                                     style: TextStyle(
                                       color: Colors.black,
                                       fontSize: 20.sp,
@@ -518,10 +553,15 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 }
 
                                 // Priority 2: Fallback to frontend calculation
+                                final displayYuan =
+                                    (product.displayYuan != null &&
+                                        product.displayYuan! > 0)
+                                    ? product.displayYuan!
+                                    : _currentPrice.value;
                                 final localPrice = CurrencyService.to
-                                    .convertFromYuan(currentPrice);
+                                    .convertFromYuan(displayYuan);
                                 return Text(
-                                  '${CurrencyService.to.localCurrencySymbol} ${localPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                                  '${product.effectiveSymbol} ${_formatPrice(localPrice)}',
                                   style: TextStyle(
                                     color: Colors.black,
                                     fontSize: 20.sp,
@@ -587,14 +627,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                       margin: EdgeInsets.only(top: 10.h),
                       padding: EdgeInsets.all(20.w),
                       color: Colors.white,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Wholesale Prices', style: AppTypography.h3),
-                          SizedBox(height: 12.h),
-                          _buildPricingTiersTable(product),
-                        ],
-                      ),
+                      child: _buildPricingTiersTable(product),
                     ),
                   ),
 
@@ -1106,7 +1139,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
 
                 return GestureDetector(
                   onTap: () {
-                    _selectedQty.value = tier.minQty;
+                    _selectedQty.value = tier.maxQty ?? tier.minQty;
                     _updatePrice();
                   },
                   child: Container(
@@ -1154,7 +1187,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                '${tier.minQty}${tier.maxQty != null ? '-${tier.maxQty}' : '+'} pcs',
+                                '${tier.maxQty ?? tier.minQty} pcs',
                                 style: TextStyle(
                                   fontSize: 13.sp,
                                   color: active
@@ -1180,7 +1213,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                       ),
                                     ),
                                     Text(
-                                      tier.pricePerUnit.toStringAsFixed(0),
+                                      _formatPrice(tier.pricePerUnit),
                                       style: TextStyle(
                                         fontSize: 22.sp,
                                         color: AppColors.error,
@@ -1197,7 +1230,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 final localPrice = CurrencyService.to
                                     .convertFromYuan(tier.pricePerUnit);
                                 return Text(
-                                  '≈ ${CurrencyService.to.localCurrencySymbol}${localPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                                  '≈ ${CurrencyService.to.localCurrencySymbol}${_formatPrice(localPrice)}',
                                   style: TextStyle(
                                     fontSize: 12.sp,
                                     color: Colors.black,

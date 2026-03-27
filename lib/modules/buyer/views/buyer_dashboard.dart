@@ -13,6 +13,21 @@ import '../../../core/widgets/cards.dart';
 import '../../../routes/app_pages.dart';
 import 'package:shimmer/shimmer.dart';
 
+String _formatPrice(double value) {
+  final absValue = value.abs();
+  final decimals = absValue < 1
+      ? 3
+      : absValue < 100
+      ? 2
+      : 0;
+  return value
+      .toStringAsFixed(decimals)
+      .replaceAllMapped(
+        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+        (Match m) => "${m[1]},",
+      );
+}
+
 class ShiftedCenterDockedLocation extends FloatingActionButtonLocation {
   const ShiftedCenterDockedLocation({this.offset = 0.0});
   final double offset;
@@ -709,7 +724,9 @@ class BuyerDashboard extends GetView<BuyerController> {
                             (Match m) => "${m[1]},",
                           );
 
-                      final displayYuanPrice = yuanPrice.toStringAsFixed(0);
+                      final displayYuanPrice = yuanPrice > 0
+                          ? yuanPrice.toStringAsFixed(0)
+                          : '';
 
                       final displayStore = store[index % store.length];
 
@@ -1757,7 +1774,7 @@ class BuyerDashboard extends GetView<BuyerController> {
                                       ),
                                     ),
                                     Text(
-                                      product.price.toStringAsFixed(0),
+                                      _formatPrice(product.effectiveYuan),
                                       style: const TextStyle(
                                         color: AppColors.error,
                                         fontSize: 14,
@@ -1774,10 +1791,9 @@ class BuyerDashboard extends GetView<BuyerController> {
                                     ),
                                     const SizedBox(width: 4),
                                     Obx(() {
-                                      final localPrice = CurrencyService.to
-                                          .convertFromYuan(product.price);
+                                      final localPrice = product.effectiveLocal;
                                       return Text(
-                                        '${CurrencyService.to.localCurrencySymbol}${localPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                                        '${CurrencyService.to.localCurrencySymbol}${_formatPrice(localPrice)}',
                                         style: const TextStyle(
                                           color: Colors.black,
                                           fontSize: 14,

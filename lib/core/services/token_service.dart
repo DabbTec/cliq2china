@@ -3,16 +3,16 @@ import 'package:get/get.dart';
 
 class TokenService extends GetxService {
   final _storage = const FlutterSecureStorage();
-  
+
   // In-memory access token (non-persistent as requested)
   String? _accessToken;
-  
+
   // Keys for persistent storage
   static const String _refreshKey = 'refresh_token';
   static const String _userKey = 'user_data';
 
   String? get accessToken => _accessToken;
-  
+
   void setAccessToken(String? token) {
     _accessToken = token;
   }

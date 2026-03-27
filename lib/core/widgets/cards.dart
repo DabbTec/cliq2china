@@ -26,6 +26,7 @@ class ProductCard extends StatelessWidget {
   final double? displayPrice; // NEW: Pre-calculated price from backend
   final double? displayYuan; // NEW: Pre-calculated Yuan from backend
   final String? displaySymbol; // NEW: Pre-calculated symbol from backend
+  final String? currency; // NEW: Seller currency code
 
   const ProductCard({
     super.key,
@@ -49,16 +50,58 @@ class ProductCard extends StatelessWidget {
     this.displayPrice,
     this.displayYuan,
     this.displaySymbol,
+    this.currency,
   });
 
   double get effectiveYuanPrice {
+    if (displayYuan != null && displayYuan! > 0) {
+      return displayYuan!;
+    }
     if (originalPriceYuan != null && originalPriceYuan! > 0) {
       return originalPriceYuan!;
     }
     if (moqTiers != null && moqTiers!.isNotEmpty) {
       return moqTiers!.first.pricePerUnit;
     }
+
+    if (currency != null &&
+        currency!.isNotEmpty &&
+        currency!.toUpperCase() != 'CNY') {
+      final rate =
+          CurrencyService.to.rates[currency!.toUpperCase()]?.rateToYuan;
+      if (rate != null && rate > 0) {
+        return price / rate;
+      }
+    }
+
     return price;
+  }
+
+  double get effectiveLocalPrice {
+    if (displayPrice != null && displayPrice! > 0) {
+      return displayPrice!;
+    }
+    if (currency != null &&
+        currency!.isNotEmpty &&
+        currency!.toUpperCase() != 'CNY') {
+      return price;
+    }
+    return CurrencyService.to.convertFromYuan(effectiveYuanPrice);
+  }
+
+  String _formatValue(double value) {
+    final absValue = value.abs();
+    final decimals = absValue < 1
+        ? 3
+        : absValue < 100
+        ? 2
+        : 0;
+    return value
+        .toStringAsFixed(decimals)
+        .replaceAllMapped(
+          RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+          (Match m) => "${m[1]},",
+        );
   }
 
   @override
@@ -284,21 +327,11 @@ class ProductCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          displayYuan != null
-                              ? displayYuan!
-                                    .toStringAsFixed(0)
-                                    .replaceAllMapped(
-                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                                      (Match m) => "${m[1]},",
-                                    )
+                          (displayYuan != null && displayYuan! > 0)
+                              ? _formatValue(displayYuan!)
                               : effectiveYuanPrice == 0
                               ? ''
-                              : effectiveYuanPrice
-                                    .toStringAsFixed(0)
-                                    .replaceAllMapped(
-                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                                      (Match m) => "${m[1]},",
-                                    ),
+                              : _formatValue(effectiveYuanPrice),
                           style: TextStyle(
                             color: const Color(0xFFE53935), // Primary Red
                             fontWeight: FontWeight.w900,
@@ -306,7 +339,8 @@ class ProductCard extends StatelessWidget {
                             letterSpacing: -0.5,
                           ),
                         ),
-                        if (displayYuan != null || effectiveYuanPrice > 0) ...[
+                        if ((displayYuan != null && displayYuan! > 0) ||
+                            effectiveYuanPrice > 0) ...[
                           SizedBox(width: 4.w), // Reduced from 6
                           Text(
                             '≈',
@@ -365,15 +399,9 @@ class ProductCard extends StatelessWidget {
                                   );
                                 }
 
-                                final localPrice = CurrencyService.to
-                                    .convertFromYuan(effectiveYuanPrice);
+                                final localPrice = effectiveLocalPrice;
                                 return Text(
-                                  localPrice
-                                      .toStringAsFixed(localPrice < 100 ? 2 : 0)
-                                      .replaceAllMapped(
-                                        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                                        (Match m) => "${m[1]},",
-                                      ),
+                                  _formatValue(localPrice),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

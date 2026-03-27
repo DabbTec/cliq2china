@@ -1,3 +1,5 @@
+import '../../core/utils/currency_service.dart';
+
 class ProductModel {
   final String id;
   final String name;
@@ -28,6 +30,42 @@ class ProductModel {
   // New nested data from backend
   final StoreInfo? store;
   final SellerInfo? seller;
+
+  double get effectiveYuan {
+    if (displayYuan != null && displayYuan! > 0) {
+      return displayYuan!;
+    }
+    if (originalPriceYuan != null && originalPriceYuan! > 0) {
+      return originalPriceYuan!;
+    }
+    if (moqTiers != null && moqTiers!.isNotEmpty) {
+      return moqTiers!.first.pricePerUnit;
+    }
+
+    final code = currency?.toUpperCase();
+    if (code != null && code.isNotEmpty && code != 'CNY') {
+      final rate = CurrencyService.to.rates[code]?.rateToYuan;
+      if (rate != null && rate > 0) {
+        return price / rate;
+      }
+    }
+
+    // Fallback to assuming existing price is already yuan.
+    return price;
+  }
+
+  double get effectiveLocal {
+    if (displayPrice != null && displayPrice! > 0) return displayPrice!;
+    if (currency != null &&
+        currency!.isNotEmpty &&
+        currency!.toUpperCase() != 'CNY') {
+      return price;
+    }
+    return CurrencyService.to.convertFromYuan(effectiveYuan);
+  }
+
+  String get effectiveSymbol =>
+      displaySymbol ?? CurrencyService.to.localCurrencySymbol;
 
   ProductModel({
     required this.id,

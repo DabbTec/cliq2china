@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/typography.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../data/models/product.dart';
 import '../../../routes/app_pages.dart';
 import '../../auth/auth_controller.dart';
@@ -1129,7 +1130,7 @@ class SellerDashboard extends GetView<SellerController> {
                             ),
                           ),
                           Text(
-                            product.price.toStringAsFixed(0),
+                            product.effectiveYuan.toStringAsFixed(0),
                             style: const TextStyle(
                               color: AppColors.error,
                               fontSize: 16,
@@ -1143,8 +1144,7 @@ class SellerDashboard extends GetView<SellerController> {
                           ),
                           const SizedBox(width: 4),
                           Obx(() {
-                            final localPrice = CurrencyService.to
-                                .convertFromYuan(product.price);
+                            final localPrice = product.effectiveLocal;
                             return Text(
                               '${CurrencyService.to.localCurrencySymbol}${localPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
                               style: const TextStyle(
@@ -1340,6 +1340,13 @@ class SellerDashboard extends GetView<SellerController> {
               Icons.security_outlined,
               'Security & Privacy',
               onTap: () => Get.toNamed(Routes.securityPrivacy),
+            ),
+            _menuItem(
+              Icons.system_update_outlined,
+              'Check for Updates',
+              onTap: () => AppUpdateService.to.checkForUpdates(
+                showNoUpdateSnackBar: true,
+              ),
             ),
 
             const Divider(color: Colors.white24, height: 40),

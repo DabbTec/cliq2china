@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../auth/auth_controller.dart';
 import '../../auth/views/login_view.dart';
 import '../buyer_controller.dart';
@@ -189,6 +190,13 @@ class BuyerProfileView extends GetView<AuthController> {
                     Icons.help_outline,
                     'Help Center',
                     () => Get.toNamed(Routes.helpCenter),
+                  ),
+                  _buildMenuItem(
+                    Icons.system_update_outlined,
+                    'Check for Updates',
+                    () => AppUpdateService.to.checkForUpdates(
+                      showNoUpdateSnackBar: true,
+                    ),
                   ),
                 ]),
                 SizedBox(height: 30.h),

@@ -6,6 +6,21 @@ import '../../../core/utils/currency_service.dart';
 import '../buyer_controller.dart';
 import '../../../routes/app_pages.dart';
 
+String _formatPrice(double value) {
+  final absValue = value.abs();
+  final decimals = absValue < 1
+      ? 3
+      : absValue < 100
+      ? 2
+      : 0;
+  return value
+      .toStringAsFixed(decimals)
+      .replaceAllMapped(
+        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
+        (Match m) => "${m[1]},",
+      );
+}
+
 class SearchView extends GetView<BuyerController> {
   const SearchView({super.key});
 
@@ -200,10 +215,9 @@ class SearchView extends GetView<BuyerController> {
                                     ),
                                   ),
                                   Text(
-                                    (product.displayYuan ??
-                                            product.originalPriceYuan ??
-                                            product.price)
-                                        .toStringAsFixed(0),
+                                    product.effectiveYuan > 0
+                                        ? _formatPrice(product.effectiveYuan)
+                                        : '',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w900,
@@ -235,26 +249,22 @@ class SearchView extends GetView<BuyerController> {
                                       );
                                     }
 
-                                    // Fallback for old data or loading states
-                                    final basePrice = product.displayYuan ??
-                                        product.originalPriceYuan ??
-                                        product.price;
-                                    if (basePrice == 0) {
+                                    final localPrice = product.effectiveLocal;
+                                    if (localPrice == 0) {
                                       return Container(
                                         width: 60,
                                         height: 18,
                                         decoration: BoxDecoration(
                                           color: Colors.grey[200],
-                                          borderRadius:
-                                              BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                       );
                                     }
 
-                                    final localPrice = CurrencyService.to
-                                        .convertFromYuan(basePrice);
                                     return Text(
-                                      '${CurrencyService.to.localCurrencySymbol}${localPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                                      '${product.effectiveSymbol}${_formatPrice(localPrice)}',
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,

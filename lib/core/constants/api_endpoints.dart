@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
+
 class ApiEndpoints {
   // IPs for different networks
   static const String _hotspotIP = '192.168.43.214'; // Current Hotspot
-  // static const String _previousIP = '192.168.225.214'; // Previous Network
+  static const String _liveUrl = 'https://c2c-backend-nine.vercel.app/api/';
+  static const String _localUrl = 'http://$_hotspotIP:8000/api/';
 
-  // Toggle this to switch networks easily
-  static const String baseUrl = 'http://$_hotspotIP:8000/api/';
+  // Automatically switch between live and local based on build mode
+  static const String baseUrl = kDebugMode ? _localUrl : _liveUrl;
 
   // Auth
   static const String login = 'auth/login/';
@@ -30,6 +33,8 @@ class ApiEndpoints {
   static const String uploadImage = 'upload-image/';
   static const String currencyRates = 'currency/rates/';
   static const String detectCurrency = 'currency/detect/';
+  static const String checkUpdate =
+      'app-version/'; // NEW: Check for APK updates
 
   // Loans
   static const String loans = 'loans/';

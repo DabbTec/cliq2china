@@ -341,7 +341,7 @@ class BuyerController extends GetxController {
   // PDV Helpers
   double calculateTieredPrice(ProductModel product, int qty) {
     if (product.moqTiers == null || product.moqTiers!.isEmpty) {
-      return product.originalPriceYuan ?? product.price;
+      return product.effectiveYuan;
     }
 
     for (var tier in product.moqTiers!) {
@@ -349,7 +349,9 @@ class BuyerController extends GetxController {
         return tier.pricePerUnit;
       }
     }
-    return product.originalPriceYuan ?? product.price;
+    return (product.displayYuan != null && product.displayYuan! > 0)
+        ? product.displayYuan!
+        : (product.originalPriceYuan ?? product.price);
   }
 
   CartItem? findCartItem(String productId) {
