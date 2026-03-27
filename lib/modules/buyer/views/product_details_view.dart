@@ -472,11 +472,13 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 ),
                               ),
                               Obx(() {
-                                final displayYuan =
+                                final unitYuan =
                                     (product.displayYuan != null &&
                                         product.displayYuan! > 0)
                                     ? product.displayYuan!
                                     : _currentPrice.value;
+                                final displayYuan =
+                                    unitYuan * _selectedQty.value;
                                 return _isLoading.value && displayYuan == 0
                                     ? Container(
                                         width: 80.w,
@@ -529,7 +531,9 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 // Priority 1: Use pre-calculated display fields from backend
                                 if (product.displayPrice != null &&
                                     product.displaySymbol != null) {
-                                  final displayLocal = product.displayPrice!;
+                                  final displayLocal =
+                                      product.displayPrice! *
+                                      _selectedQty.value;
                                   final symbol = product.displaySymbol!;
                                   final decimals = displayLocal.abs() < 1
                                       ? 3
@@ -553,11 +557,13 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 }
 
                                 // Priority 2: Fallback to frontend calculation
-                                final displayYuan =
+                                final unitYuan =
                                     (product.displayYuan != null &&
                                         product.displayYuan! > 0)
                                     ? product.displayYuan!
                                     : _currentPrice.value;
+                                final displayYuan =
+                                    unitYuan * _selectedQty.value;
                                 final localPrice = CurrencyService.to
                                     .convertFromYuan(displayYuan);
                                 return Text(

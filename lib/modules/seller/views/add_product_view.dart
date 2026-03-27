@@ -171,6 +171,17 @@ class _AddProductViewState extends State<AddProductView> {
     final maxQtyController = TextEditingController();
     final priceController = TextEditingController(text: '0');
 
+    // ADDED: Reactive variables to track current values and calculate total bundle price.
+    final RxInt currentMinQty = 1.obs;
+    final RxDouble currentPrice = 0.0.obs;
+
+    minQtyController.addListener(() {
+      currentMinQty.value = int.tryParse(minQtyController.text) ?? 1;
+    });
+    priceController.addListener(() {
+      currentPrice.value = double.tryParse(priceController.text) ?? 0.0;
+    });
+
     Get.bottomSheet(
       Container(
         padding: EdgeInsets.all(24.w),
@@ -285,6 +296,43 @@ class _AddProductViewState extends State<AddProductView> {
                     priceController.text = (val - 1).toStringAsFixed(0);
                   }
                 },
+              ),
+              SizedBox(height: 16.h),
+              Obx(
+                () => Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 12.h,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12.r),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total Bundle Price:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[800],
+                        ),
+                      ),
+                      Text(
+                        '¥${(currentPrice.value * currentMinQty.value).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16.sp,
+                          color: Colors.blue[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               SizedBox(height: 32.h),
               PrimaryButton(
@@ -883,7 +931,7 @@ class _AddProductViewState extends State<AddProductView> {
                         ),
                       ),
                       subtitle: Text(
-                        'Wholesale Price: ¥${tier.pricePerUnit}',
+                        'Unit: ¥${tier.pricePerUnit}  |  Total: ¥${(tier.pricePerUnit * tier.minQty).toStringAsFixed(2)}',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.error,
                           fontWeight: FontWeight.w600,
