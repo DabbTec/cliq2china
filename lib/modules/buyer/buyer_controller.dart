@@ -341,17 +341,34 @@ class BuyerController extends GetxController {
   // PDV Helpers
   double calculateTieredPrice(ProductModel product, int qty) {
     if (product.moqTiers == null || product.moqTiers!.isEmpty) {
+      // If no tiers, use effective unit price (which might already be total if minQty > 1)
+      // But we need unit price here.
+      if (product.minQty != null && product.minQty! > 1) {
+        return product.effectiveYuan / product.minQty!;
+      }
       return product.effectiveYuan;
     }
 
-    for (var tier in product.moqTiers!) {
-      if (qty >= tier.minQty && (tier.maxQty == null || qty <= tier.maxQty!)) {
+    // Sort tiers descending by minQty to find the highest applicable tier
+    final sortedTiers = List<MOQTier>.from(product.moqTiers!)
+      ..sort((a, b) => b.minQty.compareTo(a.minQty));
+
+    for (var tier in sortedTiers) {
+      if (qty >= tier.minQty) {
+        // If backend provides a total yuan price for the tier, calculate unit price
+        if (tier.yuanPrice != null && tier.yuanPrice! > 0) {
+          return tier.yuanPrice! / tier.minQty;
+        }
         return tier.pricePerUnit;
       }
     }
-    return (product.displayYuan != null && product.displayYuan! > 0)
-        ? product.displayYuan!
-        : (product.originalPriceYuan ?? product.price);
+
+    // Fallback to the first tier's unit price
+    final firstTier = sortedTiers.last;
+    if (firstTier.yuanPrice != null && firstTier.yuanPrice! > 0) {
+      return firstTier.yuanPrice! / firstTier.minQty;
+    }
+    return firstTier.pricePerUnit;
   }
 
   CartItem? findCartItem(String productId) {

@@ -18,9 +18,13 @@ import '../modules/buyer/views/product_details_view.dart';
 import '../modules/buyer/views/search_view.dart';
 import '../modules/buyer/views/store_view.dart';
 import '../modules/buyer/views/buyer_orders_view.dart';
+import '../modules/buyer/views/checkout_view.dart';
 import '../modules/buyer/views/edit_profile_view.dart';
 import '../modules/buyer/views/shipping_addresses_view.dart';
 import '../modules/buyer/views/security_privacy_view.dart';
+import '../modules/buyer/views/change_password_view.dart';
+import '../modules/buyer/views/privacy_policy_view.dart';
+import '../modules/buyer/views/terms_of_service_view.dart';
 import '../modules/buyer/views/help_center_view.dart';
 import '../modules/buyer/views/about_view.dart';
 import '../modules/seller/views/seller_payouts_view.dart';
@@ -28,6 +32,17 @@ import '../modules/seller/views/seller_analytics_view.dart';
 import '../modules/seller/views/seller_customers_view.dart';
 import '../modules/seller/views/seller_discounts_view.dart';
 import '../modules/seller/views/seller_store_setup_view.dart';
+import '../modules/seller/views/store_setup/basic_info_view.dart';
+import '../modules/seller/views/store_setup/verification_view.dart';
+import '../modules/seller/views/store_setup/operations_view.dart';
+import '../modules/seller/views/settings/seller_legal_view.dart';
+import '../modules/seller/views/settings/seller_payments_view.dart';
+import '../modules/seller/views/settings/seller_shipping_view.dart';
+import '../modules/seller/views/settings/seller_taxes_view.dart';
+import '../modules/seller/views/settings/seller_languages_view.dart';
+import '../modules/seller/views/settings/seller_notifications_view.dart';
+import '../modules/seller/views/settings/seller_edit_policy_view.dart';
+import '../modules/seller/views/settings/seller_contact_support_view.dart';
 import '../modules/seller/views/bulk_import_view.dart';
 
 import 'app_routes.dart';
@@ -107,6 +122,7 @@ class AppPages {
     ),
     GetPage(name: Routes.referral, page: () => const ReferralView()),
     GetPage(name: Routes.chat, page: () => const ChatView()),
+    GetPage(name: Routes.checkout, page: () => const CheckoutView()),
     GetPage(name: Routes.editProfile, page: () => const EditProfileView()),
     GetPage(
       name: Routes.shippingAddresses,
@@ -115,6 +131,15 @@ class AppPages {
     GetPage(
       name: Routes.securityPrivacy,
       page: () => const SecurityPrivacyView(),
+    ),
+    GetPage(
+      name: Routes.changePassword,
+      page: () => const ChangePasswordView(),
+    ),
+    GetPage(name: Routes.privacyPolicy, page: () => const PrivacyPolicyView()),
+    GetPage(
+      name: Routes.termsOfService,
+      page: () => const TermsOfServiceView(),
     ),
     GetPage(name: Routes.helpCenter, page: () => const HelpCenterView()),
     GetPage(name: Routes.about, page: () => const AboutView()),
@@ -135,6 +160,38 @@ class AppPages {
     GetPage(
       name: Routes.sellerStoreSetup,
       page: () => const SellerStoreSetupView(),
+    ),
+    GetPage(name: Routes.storeBasicInfo, page: () => const BasicInfoView()),
+    GetPage(
+      name: Routes.storeVerification,
+      page: () => const VerificationView(),
+    ),
+    GetPage(name: Routes.storeOperations, page: () => const OperationsView()),
+    GetPage(name: Routes.sellerLegal, page: () => const SellerLegalView()),
+    GetPage(
+      name: Routes.sellerPayments,
+      page: () => const SellerPaymentsView(),
+    ),
+    GetPage(
+      name: Routes.sellerShipping,
+      page: () => const SellerShippingView(),
+    ),
+    GetPage(name: Routes.sellerTaxes, page: () => const SellerTaxesView()),
+    GetPage(
+      name: Routes.sellerLanguages,
+      page: () => const SellerLanguagesView(),
+    ),
+    GetPage(
+      name: Routes.sellerNotifications,
+      page: () => const SellerNotificationsView(),
+    ),
+    GetPage(
+      name: Routes.sellerEditPolicy,
+      page: () => const SellerEditPolicyView(),
+    ),
+    GetPage(
+      name: Routes.sellerContactSupport,
+      page: () => const SellerContactSupportView(),
     ),
     GetPage(name: Routes.bulkImport, page: () => const BulkImportView()),
   ];

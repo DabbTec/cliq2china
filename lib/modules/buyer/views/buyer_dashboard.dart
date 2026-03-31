@@ -3,8 +3,9 @@ import 'dart:math' as math;
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../../data/models/product.dart';
 import '../../../core/constants/colors.dart';
-import '../../../core/utils/responsive.dart';
 import '../../../core/utils/currency_service.dart';
 import '../buyer_controller.dart';
 import '../../auth/auth_controller.dart';
@@ -213,14 +214,6 @@ class BuyerDashboard extends GetView<BuyerController> {
   Widget build(BuildContext context) {
     Get.put(BuyerController());
 
-    // Check for index argument to change page (e.g., to cart)
-    final dynamic args = Get.arguments;
-    if (args != null && args is Map && args.containsKey('index')) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        controller.changePage(args['index'] as int);
-      });
-    }
-
     // Show affiliate modal on first load in this session for logged-in buyers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authController = Get.find<AuthController>();
@@ -242,114 +235,131 @@ class BuyerDashboard extends GetView<BuyerController> {
         ),
         child: Scaffold(
           backgroundColor: Colors.white,
-          resizeToAvoidBottomInset: false,
+          resizeToAvoidBottomInset:
+              true, // Changed from false to allow content resizing
           appBar: _buildDynamicAppBar(),
           body: _buildBody(context),
           floatingActionButtonLocation: const ShiftedCenterDockedLocation(
             offset: 15,
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => controller.changePage(4),
-            backgroundColor: Colors.red,
-            elevation: 6,
-            shape: const CircleBorder(),
-            child: Obx(() {
-              final count = controller.cartItems.length;
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (Widget child, Animation<double> animation) {
-                  return ScaleTransition(scale: animation, child: child);
-                },
-                child: Stack(
-                  key: ValueKey<int>(count),
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(
-                      Icons.shopping_cart_outlined,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    if (count > 0)
-                      Positioned(
-                        right: -4,
-                        top: -4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
+          floatingActionButton: MediaQuery.of(context).viewInsets.bottom > 0
+              ? null
+              : FloatingActionButton(
+                  onPressed: () => controller.changePage(4),
+                  backgroundColor: Colors.red,
+                  elevation: 6,
+                  shape: const CircleBorder(),
+                  child: Obx(() {
+                    final count = controller.cartItems.length;
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) {
+                            return ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            );
+                          },
+                      child: Stack(
+                        key: ValueKey<int>(count),
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.shopping_cart_outlined,
                             color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.red, width: 1.5),
+                            size: 24,
                           ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '$count',
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                          if (count > 0)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.red,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                        ],
                       ),
-                  ],
+                    );
+                  }),
                 ),
-              );
-            }),
-          ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(30),
-                topRight: Radius.circular(30),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
+          bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
+              ? null
+              : Container(
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: BottomAppBar(
+                    padding: EdgeInsets.zero,
+                    height: 70,
+                    color: Colors.white,
+                    elevation: 0,
+                    shape: HillNotchedShape(),
+                    notchMargin: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildNavItem(
+                          0,
+                          Icons.home_outlined,
+                          Icons.home,
+                          'Home',
+                        ),
+                        _buildNavItem(
+                          1,
+                          Icons.category_outlined,
+                          Icons.category,
+                          'Shop',
+                        ),
+                        const SizedBox(width: 48),
+                        _buildNavItem(
+                          2,
+                          Icons.favorite_border,
+                          Icons.favorite,
+                          'Wishlist',
+                        ),
+                        _buildNavItem(
+                          3,
+                          Icons.person_outline,
+                          Icons.person,
+                          'Account',
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            child: BottomAppBar(
-              padding: EdgeInsets.zero,
-              height: 70,
-              color: Colors.white,
-              elevation: 0,
-              shape: HillNotchedShape(),
-              notchMargin: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildNavItem(0, Icons.home_outlined, Icons.home, 'Home'),
-                  _buildNavItem(
-                    1,
-                    Icons.category_outlined,
-                    Icons.category,
-                    'Shop',
-                  ),
-                  const SizedBox(width: 48),
-                  _buildNavItem(
-                    2,
-                    Icons.favorite_border,
-                    Icons.favorite,
-                    'Wishlist',
-                  ),
-                  _buildNavItem(
-                    3,
-                    Icons.person_outline,
-                    Icons.person,
-                    'Account',
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );
@@ -585,6 +595,7 @@ class BuyerDashboard extends GetView<BuyerController> {
         return AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
+          automaticallyImplyLeading: false,
           systemOverlayStyle: const SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.dark,
@@ -599,6 +610,7 @@ class BuyerDashboard extends GetView<BuyerController> {
         return AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
+          automaticallyImplyLeading: false,
           systemOverlayStyle: const SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.dark,
@@ -630,6 +642,7 @@ class BuyerDashboard extends GetView<BuyerController> {
         return AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
+          automaticallyImplyLeading: false,
           systemOverlayStyle: const SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.dark,
@@ -703,32 +716,10 @@ class BuyerDashboard extends GetView<BuyerController> {
                     itemBuilder: (context, index) {
                       final item = controller.cartItems[index];
                       final product = item.product;
-                      final store = [
-                        'GuangMi Appliances Store',
-                        'Dasha Cases Store',
-                        'TOP-TECH Store',
-                      ];
-
-                      final yuanPrice = controller.calculateTieredPrice(
-                        product,
-                        item.quantity.value,
-                      );
-                      final localPrice = CurrencyService.to.convertFromYuan(
-                        yuanPrice,
-                      );
-
-                      final displayPrice = localPrice
-                          .toStringAsFixed(0)
-                          .replaceAllMapped(
-                            RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                            (Match m) => "${m[1]},",
-                          );
-
-                      final displayYuanPrice = yuanPrice > 0
-                          ? yuanPrice.toStringAsFixed(0)
-                          : '';
-
-                      final displayStore = store[index % store.length];
+                      final displayStore =
+                          product.store?.name ??
+                          product.seller?.businessName ??
+                          'Unnamed Store';
 
                       Widget cartCard = Dismissible(
                         key: Key('cart_${product.id}'),
@@ -793,18 +784,27 @@ class BuyerDashboard extends GetView<BuyerController> {
                                   Text(
                                     displayStore,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 17,
+                                      color: Colors.black,
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.grey,
-                                    size: 16,
                                   ),
                                 ],
                               ),
+                              if (product.moqTiers != null &&
+                                  product.moqTiers!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 34,
+                                    top: 4,
+                                  ),
+                                  child: Obx(
+                                    () => _buildPriceDropNudge(
+                                      product,
+                                      item.quantity.value,
+                                    ),
+                                  ),
+                                ),
                               const SizedBox(height: 12),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -876,15 +876,8 @@ class BuyerDashboard extends GetView<BuyerController> {
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             color: Colors.black,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'black >',
-                                          style: TextStyle(
-                                            color: Colors.grey.shade500,
-                                            fontSize: 12,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w900,
                                           ),
                                         ),
                                         const SizedBox(height: 8),
@@ -897,71 +890,161 @@ class BuyerDashboard extends GetView<BuyerController> {
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                                  FittedBox(
-                                                    fit: BoxFit.scaleDown,
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Row(
+                                                  Obx(() {
+                                                    // Reactive calculations based on current item quantity
+                                                    final currentQty =
+                                                        item.quantity.value;
+                                                    final unitYuanPrice =
+                                                        controller
+                                                            .calculateTieredPrice(
+                                                              product,
+                                                              currentQty,
+                                                            );
+                                                    final totalYuanPrice =
+                                                        unitYuanPrice *
+                                                        currentQty;
+                                                    final totalLocalPrice =
+                                                        CurrencyService.to
+                                                            .convertFromYuan(
+                                                              totalYuanPrice,
+                                                            );
+
+                                                    final displayPriceStr =
+                                                        totalLocalPrice
+                                                            .toStringAsFixed(0)
+                                                            .replaceAllMapped(
+                                                              RegExp(
+                                                                r"(\d{1,3})(?=(\d{3})+(?!\d))",
+                                                              ),
+                                                              (Match m) =>
+                                                                  "${m[1]},",
+                                                            );
+
+                                                    final displayYuanPriceStr =
+                                                        totalYuanPrice > 0
+                                                        ? totalYuanPrice
+                                                              .toStringAsFixed(
+                                                                0,
+                                                              )
+                                                        : '';
+
+                                                    // Ensure GetX tracks location changes
+                                                    CurrencyService
+                                                        .to
+                                                        .currentLocation
+                                                        .value;
+
+                                                    return Column(
                                                       crossAxisAlignment:
                                                           CrossAxisAlignment
-                                                              .end,
+                                                              .start,
                                                       children: [
-                                                        Text(
-                                                          '¥',
-                                                          style: TextStyle(
-                                                            color:
-                                                                AppColors.error,
-                                                            fontSize: 12,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          displayYuanPrice,
-                                                          style: TextStyle(
-                                                            color:
-                                                                AppColors.error,
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight.w900,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Text(
-                                                          '≈',
-                                                          style: TextStyle(
-                                                            color: Colors
-                                                                .grey[400],
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Obx(() {
-                                                          // Ensure GetX tracks location changes
-                                                          CurrencyService
-                                                              .to
-                                                              .currentLocation
-                                                              .value;
-                                                          return Text(
-                                                            '${CurrencyService.to.localCurrencySymbol}$displayPrice',
-                                                            style:
-                                                                const TextStyle(
+                                                        FittedBox(
+                                                          fit: BoxFit.scaleDown,
+                                                          alignment: Alignment
+                                                              .centerLeft,
+                                                          child: Row(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .end,
+                                                            children: [
+                                                              Text(
+                                                                '¥',
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      AppColors
+                                                                          .error,
+                                                                  fontSize: 18,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                displayYuanPriceStr,
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      AppColors
+                                                                          .error,
+                                                                  fontSize: 26,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 4,
+                                                              ),
+                                                              Text(
+                                                                '(≈ ',
+                                                                style: TextStyle(
                                                                   color: Colors
                                                                       .black,
-                                                                  fontSize: 14,
+                                                                  fontSize: 18,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
                                                                 ),
-                                                          );
-                                                        }),
+                                                              ),
+                                                              Text(
+                                                                '${CurrencyService.to.localCurrencySymbol}$displayPriceStr',
+                                                                style: const TextStyle(
+                                                                  color: Colors
+                                                                      .black,
+                                                                  fontSize: 22,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                ')',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .black,
+                                                                  fontSize: 18,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                              ),
+                                                              if ((product.moqTiers !=
+                                                                          null &&
+                                                                      product
+                                                                          .moqTiers!
+                                                                          .isNotEmpty) ||
+                                                                  (product.minQty !=
+                                                                          null &&
+                                                                      product.minQty! >
+                                                                          1))
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.only(
+                                                                        left: 8,
+                                                                      ),
+                                                                  child: Text(
+                                                                    '$currentQty pcs',
+                                                                    style: const TextStyle(
+                                                                      fontSize:
+                                                                          15,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w900,
+                                                                      color: Colors
+                                                                          .black,
+                                                                    ),
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                    maxLines: 1,
+                                                                  ),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ],
-                                                    ),
-                                                  ),
+                                                    );
+                                                  }),
                                                   if (product.originalPrice !=
                                                       null)
                                                     Padding(
@@ -1192,7 +1275,10 @@ class BuyerDashboard extends GetView<BuyerController> {
                       const SizedBox(width: 8),
                       const Text(
                         'All',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 17,
+                        ),
                       ),
                       const Spacer(),
                       Obx(() {
@@ -1208,16 +1294,17 @@ class BuyerDashboard extends GetView<BuyerController> {
                                   '¥ ${yuanTotal.toStringAsFixed(0)}',
                                   style: TextStyle(
                                     color: AppColors.error,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '≈',
                                   style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 11,
+                                    color: Colors.black,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -1231,8 +1318,9 @@ class BuyerDashboard extends GetView<BuyerController> {
                               return Text(
                                 '${CurrencyService.to.localCurrencySymbol} ${localTotal.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 26,
+                                  color: Colors.black,
                                 ),
                               );
                             }),
@@ -1241,7 +1329,7 @@ class BuyerDashboard extends GetView<BuyerController> {
                       }),
                       const SizedBox(width: 16),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () => Get.toNamed(Routes.checkout),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -1252,11 +1340,15 @@ class BuyerDashboard extends GetView<BuyerController> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
                           ),
+                          elevation: 0,
                         ),
                         child: Obx(
                           () => Text(
                             'Checkout (${controller.selectedCount})',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
                           ),
                         ),
                       ),
@@ -1321,6 +1413,7 @@ class BuyerDashboard extends GetView<BuyerController> {
               pinned: true,
               primary: true,
               elevation: 0,
+              automaticallyImplyLeading: false,
               toolbarHeight: 40,
               titleSpacing: 16,
               backgroundColor: Colors.white,
@@ -1501,7 +1594,6 @@ class BuyerDashboard extends GetView<BuyerController> {
                       'All Products',
                       style: TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    Icon(Icons.chevron_right, color: Colors.grey, size: 20),
                   ],
                 ),
               ),
@@ -2180,6 +2272,7 @@ class BuyerDashboard extends GetView<BuyerController> {
             title: product.name,
             price: basePrice,
             originalPriceYuan: product.originalPriceYuan,
+            minQty: product.minQty,
             moqTiers: product.moqTiers,
             displayPrice: product.displayPrice,
             displayYuan: product.displayYuan,
@@ -2201,6 +2294,10 @@ class BuyerDashboard extends GetView<BuyerController> {
             ),
             onAddToCart: () => controller.addToCart(product),
             onToggleWishlist: () => controller.toggleWishlist(product),
+            storeName:
+                product.store?.name ??
+                product.seller?.businessName ??
+                'Unnamed Store',
           ),
         );
 
@@ -2222,6 +2319,73 @@ class BuyerDashboard extends GetView<BuyerController> {
         ),
       );
     });
+  }
+
+  Widget _buildPriceDropNudge(ProductModel product, int currentQty) {
+    if (product.moqTiers == null || product.moqTiers!.isEmpty) {
+      return const SizedBox();
+    }
+
+    // Find the next tier
+    final sortedTiers = List<MOQTier>.from(product.moqTiers!)
+      ..sort((a, b) => a.minQty.compareTo(b.minQty));
+
+    MOQTier? nextTier;
+    for (var tier in sortedTiers) {
+      if (tier.minQty > currentQty) {
+        nextTier = tier;
+        break;
+      }
+    }
+
+    if (nextTier == null) return const SizedBox();
+
+    final diff = nextTier.minQty - currentQty;
+    final currentUnitPrice = controller.calculateTieredPrice(
+      product,
+      currentQty,
+    );
+
+    double nextUnitPrice = nextTier.pricePerUnit;
+    if (nextTier.yuanPrice != null && nextTier.yuanPrice! > 0) {
+      nextUnitPrice = nextTier.yuanPrice! / nextTier.minQty;
+    }
+
+    final unitPriceDrop = currentUnitPrice - nextUnitPrice;
+    if (unitPriceDrop <= 0) return const SizedBox();
+
+    // Calculate total savings on the new total quantity
+    final totalSavingsYuan = unitPriceDrop * nextTier.minQty;
+    final totalSavingsLocal = CurrencyService.to.convertFromYuan(
+      totalSavingsYuan,
+    );
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4.r),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.trending_down, size: 14.sp, color: Colors.red),
+          SizedBox(width: 4.w),
+          Flexible(
+            child: Text(
+              'Add $diff more to save ¥${totalSavingsYuan.toStringAsFixed(0)} (≈ ${CurrencyService.to.localCurrencySymbol}${totalSavingsLocal.toStringAsFixed(0)}) in total',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w900,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildShimmer() {

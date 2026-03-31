@@ -32,18 +32,15 @@ class _AddProductViewState extends State<AddProductView> {
   bool get isEditMode => widget.product != null;
 
   // Basic Info Controllers
-  late final TextEditingController _titleController;
-  late final TextEditingController _descController;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
 
   // Pricing & Inventory Controllers
-  late final TextEditingController _priceController;
-  late final TextEditingController _stockController;
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _stockController = TextEditingController();
+  final TextEditingController _minQtyController = TextEditingController();
 
-  final RxList<File> _selectedFiles = <File>[].obs;
-  final RxList<String> _existingImageUrls = <String>[].obs;
-  final RxBool _isPublishing = false.obs;
-
-  late final RxString _selectedCategory;
+  final RxString _selectedCategory = 'Electronics'.obs;
   final List<String> _categories = [
     'Electronics',
     'Fashion',
@@ -51,7 +48,16 @@ class _AddProductViewState extends State<AddProductView> {
     'Beauty',
     'Toys',
   ];
-  late final RxString _productStatus;
+  final RxString _productStatus = 'active'.obs;
+
+  final RxList<File> _selectedFiles = <File>[].obs;
+  final RxList<String> _existingImageUrls = <String>[].obs;
+  final RxBool _isPublishing = false.obs;
+
+  // Added: Reactive variables for base price section
+  final RxDouble _localPrice = 0.0.obs;
+  final RxInt _minQty = 1.obs;
+  final RxDouble _yuanValue = 0.0.obs;
 
   // Variants State
   final RxList<ProductVariant> _variants = <ProductVariant>[].obs;
@@ -64,37 +70,52 @@ class _AddProductViewState extends State<AddProductView> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.product?.name ?? '');
-    _descController = TextEditingController(
-      text: widget.product?.description ?? '',
-    );
-    _priceController = TextEditingController(
-      text: widget.product?.price.toString() ?? '0',
-    );
-    _stockController = TextEditingController(
-      text: widget.product?.stock.toString() ?? '0',
-    );
 
-    _selectedCategory = (widget.product?.category ?? 'Electronics').obs;
-    _productStatus = (widget.product?.status ?? 'active').obs;
+    if (isEditMode && widget.product != null) {
+      _titleController.text = widget.product!.name;
+      _descController.text = widget.product!.description;
+      _priceController.text = widget.product!.price.toString();
+      _stockController.text = widget.product!.stock.toString();
+      _minQtyController.text = (widget.product!.minQty ?? 1).toString();
+      _selectedCategory.value = widget.product!.category;
+      _productStatus.value = widget.product!.status ?? 'active';
 
-    if (isEditMode && widget.product?.galleryUrls != null) {
-      _existingImageUrls.assignAll(widget.product!.galleryUrls);
-    }
+      if (widget.product?.galleryUrls != null) {
+        _existingImageUrls.assignAll(widget.product!.galleryUrls);
+      }
 
-    if (isEditMode && widget.product?.variants != null) {
-      _hasVariants.value = true;
-      _variants.assignAll(widget.product!.variants!);
-    }
+      if (widget.product?.variants != null) {
+        _hasVariants.value = true;
+        _variants.assignAll(widget.product!.variants!);
+      }
 
-    if (isEditMode && widget.product?.moqTiers != null) {
-      _hasTiers.value = true;
-      _moqTiers.assignAll(widget.product!.moqTiers!);
-    }
+      if (widget.product?.moqTiers != null) {
+        _hasTiers.value = true;
+        _moqTiers.assignAll(widget.product!.moqTiers!);
+      }
 
-    if (isEditMode) {
       _fetchLatestDetails();
+    } else {
+      // Default values for new product
+      _priceController.text = '0';
+      _stockController.text = '0';
+      _minQtyController.text = '1';
     }
+
+    // Add listeners
+    _priceController.addListener(_updateBasePrices);
+    _minQtyController.addListener(_updateBasePrices);
+
+    // Initial calculation
+    _updateBasePrices();
+  }
+
+  void _updateBasePrices() {
+    final price = double.tryParse(_priceController.text) ?? 0;
+    final qty = int.tryParse(_minQtyController.text) ?? 1;
+    _localPrice.value = price;
+    _minQty.value = qty;
+    _yuanValue.value = CurrencyService.to.convertToYuan(price * qty);
   }
 
   Future<void> _fetchLatestDetails() async {
@@ -107,6 +128,7 @@ class _AddProductViewState extends State<AddProductView> {
         _descController.text = latestProduct.description;
         _priceController.text = latestProduct.price.toString();
         _stockController.text = latestProduct.stock.toString();
+        _minQtyController.text = (latestProduct.minQty ?? 1).toString();
         _selectedCategory.value = latestProduct.category;
         _productStatus.value = latestProduct.status ?? 'active';
 
@@ -131,6 +153,7 @@ class _AddProductViewState extends State<AddProductView> {
     _descController.dispose();
     _priceController.dispose();
     _stockController.dispose();
+    _minQtyController.dispose();
     super.dispose();
   }
 
@@ -170,17 +193,6 @@ class _AddProductViewState extends State<AddProductView> {
     final minQtyController = TextEditingController(text: '1');
     final maxQtyController = TextEditingController();
     final priceController = TextEditingController(text: '0');
-
-    // ADDED: Reactive variables to track current values and calculate total bundle price.
-    final RxInt currentMinQty = 1.obs;
-    final RxDouble currentPrice = 0.0.obs;
-
-    minQtyController.addListener(() {
-      currentMinQty.value = int.tryParse(minQtyController.text) ?? 1;
-    });
-    priceController.addListener(() {
-      currentPrice.value = double.tryParse(priceController.text) ?? 0.0;
-    });
 
     Get.bottomSheet(
       Container(
@@ -283,7 +295,8 @@ class _AddProductViewState extends State<AddProductView> {
               ),
               SizedBox(height: 24.h),
               NumericStepInputBeautiful(
-                label: 'Price per Unit (CNY)',
+                label:
+                    'Price per Unit (${CurrencyService.to.localCurrencyCode})',
                 controller: priceController,
                 icon: Icons.payments_outlined,
                 onIncrement: () {
@@ -297,54 +310,17 @@ class _AddProductViewState extends State<AddProductView> {
                   }
                 },
               ),
-              SizedBox(height: 16.h),
-              Obx(
-                () => Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16.w,
-                    vertical: 12.h,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(12.r),
-                    border: Border.all(
-                      color: Colors.blue.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Bundle Price:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[800],
-                        ),
-                      ),
-                      Text(
-                        '¥${(currentPrice.value * currentMinQty.value).toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16.sp,
-                          color: Colors.blue[900],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               SizedBox(height: 32.h),
               PrimaryButton(
                 text: 'Add MOQ Tier',
                 color: Colors.black,
                 textColor: Colors.white,
                 onPressed: () {
-                  final priceText = priceController.text.trim();
+                  final priceLocalText = priceController.text.trim();
                   final minQtyText = minQtyController.text.trim();
                   final maxQtyText = maxQtyController.text.trim();
 
-                  final price = double.tryParse(priceText) ?? 0;
+                  final priceLocal = double.tryParse(priceLocalText) ?? 0;
                   final minQty = int.tryParse(minQtyText) ?? 0;
                   final maxQty = maxQtyText.isEmpty
                       ? null
@@ -360,7 +336,7 @@ class _AddProductViewState extends State<AddProductView> {
                     return;
                   }
 
-                  if (price <= 0) {
+                  if (priceLocal <= 0) {
                     Get.snackbar(
                       'Invalid Price',
                       'Wholesale price must be greater than 0',
@@ -380,12 +356,17 @@ class _AddProductViewState extends State<AddProductView> {
                     return;
                   }
 
+                  // Convert local price to Yuan before adding to tier
+                  final priceYuan = CurrencyService.to.convertToYuan(
+                    priceLocal,
+                  );
+
                   // Add to list
                   _moqTiers.add(
                     MOQTier(
                       minQty: minQty,
                       maxQty: maxQty,
-                      pricePerUnit: price,
+                      pricePerUnit: priceYuan,
                     ),
                   );
 
@@ -476,7 +457,7 @@ class _AddProductViewState extends State<AddProductView> {
                 children: [
                   Expanded(
                     child: NumericStepInputBeautiful(
-                      label: 'Price (Optional)',
+                      label: 'Price (${CurrencyService.to.localCurrencyCode})',
                       controller: priceController,
                       onIncrement: () {
                         double val = double.tryParse(priceController.text) ?? 0;
@@ -516,11 +497,17 @@ class _AddProductViewState extends State<AddProductView> {
                 textColor: Colors.white,
                 onPressed: () {
                   if (valueController.text.isNotEmpty) {
+                    final priceLocal =
+                        double.tryParse(priceController.text) ?? 0;
+                    final priceYuan = priceLocal > 0
+                        ? CurrencyService.to.convertToYuan(priceLocal)
+                        : null;
+
                     _variants.add(
                       ProductVariant(
                         type: type,
                         value: valueController.text,
-                        price: double.tryParse(priceController.text),
+                        price: priceYuan,
                         stock: int.tryParse(stockController.text),
                       ),
                     );
@@ -752,71 +739,101 @@ class _AddProductViewState extends State<AddProductView> {
   }
 
   Widget _buildPricingInventorySection() {
-    final RxDouble yuanValue = 0.0.obs;
-
-    void convertToYuan(String localPrice) {
-      final price = double.tryParse(localPrice) ?? 0;
-      yuanValue.value = CurrencyService.to.convertToYuan(price);
-    }
-
-    _priceController.addListener(() => convertToYuan(_priceController.text));
-
     return _buildCard(
       child: Column(
         children: [
-          Obx(
-            () => CustomTextFieldBeautiful(
-              labelText:
-                  'Base Price (${CurrencyService.to.localCurrencySymbol})',
-              controller: _priceController,
-              hintText: 'e.g. 50000',
-              keyboardType: TextInputType.number,
-              validator: (v) {
-                if (_hasTiers.value && _moqTiers.isNotEmpty) return null;
-                return v!.isEmpty || v == '0' ? 'Price required' : null;
-              },
-            ),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Obx(
+                  () => CustomTextFieldBeautiful(
+                    labelText:
+                        'Base Unit Price (${CurrencyService.to.localCurrencySymbol})',
+                    controller: _priceController,
+                    hintText: 'e.g. 50000',
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (_hasTiers.value && _moqTiers.isNotEmpty) return null;
+                      return v!.isEmpty || v == '0' ? 'Price required' : null;
+                    },
+                  ),
+                ),
+              ),
+              SizedBox(width: 16.w),
+              Expanded(
+                child: NumericStepInputBeautiful(
+                  label: 'Min Order',
+                  controller: _minQtyController,
+                  onIncrement: () {
+                    int val = int.tryParse(_minQtyController.text) ?? 1;
+                    _minQtyController.text = (val + 1).toString();
+                  },
+                  onDecrement: () {
+                    int val = int.tryParse(_minQtyController.text) ?? 1;
+                    if (val > 1) {
+                      _minQtyController.text = (val - 1).toString();
+                    }
+                  },
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 12.h),
           Obx(
             () => Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.05),
+                color: AppColors.error.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.2),
+                ),
               ),
               child: Column(
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: Colors.blue[700],
-                        size: 18.sp,
+                      Text(
+                        'Total Local Price:',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.sp,
+                        ),
                       ),
-                      SizedBox(width: 10.w),
-                      Flexible(
-                        child: Text(
-                          'Equivalent to: ¥${yuanValue.value.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Colors.blue[800],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14.sp,
-                          ),
+                      Text(
+                        '${CurrencyService.to.localCurrencySymbol}${(_localPrice.value * _minQty.value).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18.sp,
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 8.h),
-                  Text(
-                    'Current Rate: 1 CNY = ${CurrencyService.to.exchangeRateToYuan.toStringAsFixed(2)} ${CurrencyService.to.localCurrencyCode}',
-                    style: TextStyle(
-                      color: Colors.blue[600],
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  const Divider(height: 16, color: Colors.black12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Equivalent in Yuan:',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12.sp,
+                        ),
+                      ),
+                      Text(
+                        '¥${_yuanValue.value.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14.sp,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -824,7 +841,7 @@ class _AddProductViewState extends State<AddProductView> {
           ),
           SizedBox(height: 20.h),
           NumericStepInputBeautiful(
-            label: 'Total Stock',
+            label: 'Total Stock Available',
             controller: _stockController,
             icon: Icons.inventory_2_outlined,
             onIncrement: () {
@@ -931,7 +948,7 @@ class _AddProductViewState extends State<AddProductView> {
                         ),
                       ),
                       subtitle: Text(
-                        'Unit: ¥${tier.pricePerUnit}  |  Total: ¥${(tier.pricePerUnit * tier.minQty).toStringAsFixed(2)}',
+                        'Wholesale Price: ¥${tier.pricePerUnit}',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.error,
                           fontWeight: FontWeight.w600,
@@ -1338,6 +1355,8 @@ class _AddProductViewState extends State<AddProductView> {
               : double.parse(_priceController.text),
           'currency':
               CurrencyService.to.localCurrencyCode, // NEW: Local currency
+          'min_qty':
+              int.tryParse(_minQtyController.text) ?? 1, // Added: Min Qty
           'stock': int.parse(_stockController.text),
           'category': _selectedCategory.value,
           'image_url': finalGalleryUrls.first,
@@ -1362,6 +1381,7 @@ class _AddProductViewState extends State<AddProductView> {
                 : double.parse(_priceController.text),
             currency:
                 CurrencyService.to.localCurrencyCode, // NEW: Local currency
+            minQty: int.tryParse(_minQtyController.text) ?? 1, // Added: Min Qty
             stock: int.parse(_stockController.text),
             category: _selectedCategory.value,
             imageUrl: finalGalleryUrls.first,

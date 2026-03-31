@@ -20,6 +20,23 @@ class SellerController extends GetxController {
   // Orders (To be fetched from API later)
   final RxList<Map<String, dynamic>> orders = <Map<String, dynamic>>[].obs;
 
+  // Search Logic
+  final RxString searchQuery = ''.obs;
+  final RxList<ProductModel> filteredProducts = <ProductModel>[].obs;
+
+  void updateSearch(String query) {
+    searchQuery.value = query;
+    if (query.isEmpty) {
+      filteredProducts.assignAll(myProducts);
+    } else {
+      filteredProducts.assignAll(
+        myProducts
+            .where((p) => p.name.toLowerCase().contains(query.toLowerCase()))
+            .toList(),
+      );
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();

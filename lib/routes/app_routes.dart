@@ -11,10 +11,14 @@ abstract class Routes {
   static const loanDashboard = '/loan-dashboard';
   static const referral = '/referral';
   static const chat = '/chat';
+  static const checkout = '/checkout';
   static const buyerOrders = '/orders';
   static const editProfile = '/edit-profile';
   static const shippingAddresses = '/shipping-addresses';
   static const securityPrivacy = '/security-privacy';
+  static const changePassword = '/change-password';
+  static const privacyPolicy = '/privacy-policy';
+  static const termsOfService = '/terms-of-service';
   static const helpCenter = '/help-center';
   static const about = '/about';
   // Seller Routes
@@ -23,5 +27,18 @@ abstract class Routes {
   static const sellerCustomers = '/seller-customers';
   static const sellerDiscounts = '/seller-discounts';
   static const sellerStoreSetup = '/seller-store-setup';
+  static const storeBasicInfo = '/store-basic-info';
+  static const storeVerification = '/store-verification';
+  static const storeOperations = '/store-operations';
+  static const sellerLegal = '/seller-legal';
+  static const sellerPayments = '/seller-payments';
+  static const sellerShipping = '/seller-shipping';
+  static const sellerTaxes = '/seller-taxes';
+  static const sellerLanguages = '/seller-languages';
+  static const sellerNotifications = '/seller-notifications';
+  static const sellerEditPolicy = '/seller-edit-policy';
+  static const sellerContactSupport = '/seller-contact-support';
+  static const sellerProfile = '/seller-profile';
+  static const sellerSearch = '/seller-search';
   static const bulkImport = '/bulk-import';
 }

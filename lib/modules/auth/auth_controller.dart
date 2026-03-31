@@ -65,9 +65,10 @@ class AuthController extends GetxController {
     String password, {
     bool rememberMe = false,
   }) async {
+    final normalizedEmail = email.trim().toLowerCase();
     isLoading.value = true;
     try {
-      final response = await _authRepository.login(email, password);
+      final response = await _authRepository.login(normalizedEmail, password);
       final loggedInUser = UserModel.fromJson(response['user']);
       final tokens = response['tokens'];
 
@@ -145,11 +146,12 @@ class AuthController extends GetxController {
     String? referralCode,
     VoidCallback? onSuccess,
   }) async {
+    final normalizedEmail = email.trim().toLowerCase();
     isLoading.value = true;
     try {
       final newUser = UserModel(
         id: '', // Backend will generate UUID
-        email: email,
+        email: normalizedEmail,
         name: name,
         phone: phone,
         address: address,

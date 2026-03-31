@@ -18,6 +18,7 @@ class ProductModel {
   final double? weight;
   final String? status; // 'active', 'draft', 'archived'
   final String? currency; // NEW: Seller's local currency code
+  final int? minQty; // NEW: Minimum order quantity at root level
   final List<ProductVariant>? variants;
   final List<MOQTier>? moqTiers;
 
@@ -32,35 +33,64 @@ class ProductModel {
   final SellerInfo? seller;
 
   double get effectiveYuan {
-    if (displayYuan != null && displayYuan! > 0) {
-      return displayYuan!;
-    }
-    if (originalPriceYuan != null && originalPriceYuan! > 0) {
-      return originalPriceYuan!;
-    }
     if (moqTiers != null && moqTiers!.isNotEmpty) {
-      return moqTiers!.first.pricePerUnit;
+      final firstTier = moqTiers!.first;
+      // Prioritize total tier price from backend
+      if (firstTier.yuanPrice != null && firstTier.yuanPrice! > 0) {
+        return firstTier.yuanPrice!;
+      }
+      return firstTier.pricePerUnit * firstTier.minQty;
     }
 
-    final code = currency?.toUpperCase();
-    if (code != null && code.isNotEmpty && code != 'CNY') {
-      final rate = CurrencyService.to.rates[code]?.rateToYuan;
-      if (rate != null && rate > 0) {
-        return price / rate;
+    // Fallback to unit price multiplied by root-level MOQ
+    double unitYuan = price;
+    if (displayYuan != null && displayYuan! > 0) {
+      unitYuan = displayYuan!;
+    } else if (originalPriceYuan != null && originalPriceYuan! > 0) {
+      unitYuan = originalPriceYuan!;
+    } else {
+      final code = currency?.toUpperCase();
+      if (code != null && code.isNotEmpty && code != 'CNY') {
+        final rate = CurrencyService.to.rates[code]?.rateToYuan;
+        if (rate != null && rate > 0) {
+          unitYuan = price / rate;
+        }
       }
     }
 
-    // Fallback to assuming existing price is already yuan.
-    return price;
+    if (minQty != null && minQty! > 1) {
+      return unitYuan * minQty!;
+    }
+    return unitYuan;
   }
 
   double get effectiveLocal {
-    if (displayPrice != null && displayPrice! > 0) return displayPrice!;
+    if (moqTiers != null && moqTiers!.isNotEmpty) {
+      final firstTier = moqTiers!.first;
+      // Prioritize total tier price from backend
+      if (firstTier.localPrice != null && firstTier.localPrice! > 0) {
+        return firstTier.localPrice!;
+      }
+      return CurrencyService.to.convertFromYuan(effectiveYuan);
+    }
+
+    // Fallback to total price based on effectiveYuan (which handles minQty)
+    if (displayPrice != null && displayPrice! > 0) {
+      if (minQty != null && minQty! > 1) {
+        return displayPrice! * minQty!;
+      }
+      return displayPrice!;
+    }
+
     if (currency != null &&
         currency!.isNotEmpty &&
         currency!.toUpperCase() != 'CNY') {
+      if (minQty != null && minQty! > 1) {
+        return price * minQty!;
+      }
       return price;
     }
+
     return CurrencyService.to.convertFromYuan(effectiveYuan);
   }
 
@@ -85,6 +115,7 @@ class ProductModel {
     this.weight,
     this.status = 'active',
     this.currency,
+    this.minQty,
     this.variants,
     this.moqTiers,
     this.displayPrice,
@@ -114,6 +145,7 @@ class ProductModel {
       weight: (json['weight'] as num?)?.toDouble(),
       status: json['status'] ?? 'active',
       currency: json['currency'],
+      minQty: json['min_qty'] ?? json['moq'],
       displayPrice: (json['display_price'] as num?)?.toDouble(),
       displayYuan: (json['display_yuan'] as num?)?.toDouble(),
       displaySymbol: json['display_symbol'],
@@ -169,15 +201,32 @@ class ProductModel {
 class MOQTier {
   final int minQty;
   final int? maxQty;
-  final double pricePerUnit;
+  final double pricePerUnit; // Fallback
+  final double? localPrice; // Real local price from backend
+  final double? yuanPrice; // Real yuan price from backend
 
-  MOQTier({required this.minQty, this.maxQty, required this.pricePerUnit});
+  MOQTier({
+    required this.minQty,
+    this.maxQty,
+    required this.pricePerUnit,
+    this.localPrice,
+    this.yuanPrice,
+  });
 
   factory MOQTier.fromJson(Map<String, dynamic> json) {
+    // Safely extract the exact prices calculated/saved by the backend
+    final localP = json['local_price'] ?? json['display_price'];
+    final yuanP = json['yuan_price'] ?? json['display_yuan'];
+
     return MOQTier(
-      minQty: json['min_qty'],
+      minQty: json['min_qty'] ?? 1,
       maxQty: json['max_qty'],
-      pricePerUnit: (json['price_per_unit'] as num).toDouble(),
+      pricePerUnit:
+          (json['price_per_unit'] as num?)?.toDouble() ??
+          (yuanP as num?)?.toDouble() ??
+          0.0,
+      localPrice: (localP as num?)?.toDouble(),
+      yuanPrice: (yuanP as num?)?.toDouble(),
     );
   }
 
@@ -186,6 +235,8 @@ class MOQTier {
       'min_qty': minQty,
       if (maxQty != null) 'max_qty': maxQty,
       'price_per_unit': pricePerUnit,
+      if (localPrice != null) 'local_price': localPrice,
+      if (yuanPrice != null) 'yuan_price': yuanPrice,
     };
   }
 }
@@ -238,12 +289,21 @@ class StoreInfo {
 class SellerInfo {
   final String name;
   final String? phone;
+  final String? businessName;
 
-  SellerInfo({required this.name, this.phone});
+  SellerInfo({required this.name, this.phone, this.businessName});
 
   factory SellerInfo.fromJson(Map<String, dynamic> json) {
-    return SellerInfo(name: json['name'] ?? '', phone: json['phone']);
+    return SellerInfo(
+      name: json['name'] ?? '',
+      phone: json['phone'],
+      businessName: json['business_name'] ?? json['store_name'],
+    );
   }
 
-  Map<String, dynamic> toJson() => {'name': name, 'phone': phone};
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'phone': phone,
+    'business_name': businessName,
+  };
 }

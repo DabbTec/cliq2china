@@ -4,13 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/typography.dart';
-import '../../../core/services/app_update_service.dart';
 import '../../../data/models/product.dart';
 import '../../../routes/app_pages.dart';
 import '../../auth/auth_controller.dart';
 import '../seller_controller.dart';
 import '../../../core/utils/currency_service.dart';
 import 'add_product_view.dart';
+
+import 'seller_profile_view.dart';
 
 class SellerDashboard extends GetView<SellerController> {
   const SellerDashboard({super.key});
@@ -63,9 +64,7 @@ class SellerDashboard extends GetView<SellerController> {
                             _buildOrdersTab(), // Index 2
                             _buildProductsTab(), // Index 3
                             _buildMenuTab(), // Index 4
-                            const Center(
-                              child: Text('Profile Content'),
-                            ), // Index 5
+                            const SellerProfileView(), // Index 5
                             _buildSettingsView(), // Index 6
                           ],
                         ),
@@ -75,12 +74,13 @@ class SellerDashboard extends GetView<SellerController> {
                 ],
               ),
               // Floating Bottom Nav Bar
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 10,
-                child: Obx(() => _buildFloatingNavBar()),
-              ),
+              if (MediaQuery.of(context).viewInsets.bottom == 0)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 20,
+                  child: Obx(() => _buildFloatingNavBar()),
+                ),
             ],
           );
         }),
@@ -1334,19 +1334,12 @@ class SellerDashboard extends GetView<SellerController> {
             _menuItem(
               Icons.help_outline,
               'Help Center',
-              onTap: () => Get.toNamed(Routes.helpCenter),
+              onTap: () => Get.toNamed(Routes.sellerContactSupport),
             ),
             _menuItem(
               Icons.security_outlined,
               'Security & Privacy',
               onTap: () => Get.toNamed(Routes.securityPrivacy),
-            ),
-            _menuItem(
-              Icons.system_update_outlined,
-              'Check for Updates',
-              onTap: () => AppUpdateService.to.checkForUpdates(
-                showNoUpdateSnackBar: true,
-              ),
             ),
 
             const Divider(color: Colors.white24, height: 40),
@@ -1430,16 +1423,12 @@ class SellerDashboard extends GetView<SellerController> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _settingGroup('Store Profile', [
-          _settingItem(
-            Icons.info_outline,
-            'Store details',
-            'Name, address, and contact info',
-          ),
+        _settingGroup('Policy & Legal', [
           _settingItem(
             Icons.description_outlined,
             'Legal',
             'Privacy policy, terms of service',
+            onTap: () => Get.toNamed(Routes.sellerLegal),
           ),
         ]),
         const SizedBox(height: 24),
@@ -1448,16 +1437,19 @@ class SellerDashboard extends GetView<SellerController> {
             Icons.payment,
             'Payments',
             'Payment providers and methods',
+            onTap: () => Get.toNamed(Routes.sellerPayments),
           ),
           _settingItem(
             Icons.local_shipping_outlined,
             'Shipping and delivery',
             'Rates and processing times',
+            onTap: () => Get.toNamed(Routes.sellerShipping),
           ),
           _settingItem(
             Icons.receipt_long_outlined,
             'Taxes and duties',
             'Manage how you charge tax',
+            onTap: () => Get.toNamed(Routes.sellerTaxes),
           ),
         ]),
         const SizedBox(height: 24),
@@ -1466,11 +1458,13 @@ class SellerDashboard extends GetView<SellerController> {
             Icons.language,
             'Languages',
             'Store language and translations',
+            onTap: () => Get.toNamed(Routes.sellerLanguages),
           ),
           _settingItem(
             Icons.notifications_active_outlined,
             'Notifications',
             'Customer and staff notifications',
+            onTap: () => Get.toNamed(Routes.sellerNotifications),
           ),
         ]),
       ],
@@ -1504,7 +1498,12 @@ class SellerDashboard extends GetView<SellerController> {
     );
   }
 
-  Widget _settingItem(IconData icon, String title, String subtitle) {
+  Widget _settingItem(
+    IconData icon,
+    String title,
+    String subtitle, {
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.black87),
       title: Text(
@@ -1516,7 +1515,7 @@ class SellerDashboard extends GetView<SellerController> {
         style: AppTypography.bodySmall.copyWith(color: Colors.grey),
       ),
       trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 

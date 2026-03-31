@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../auth/auth_controller.dart';
 
+import '../../../routes/app_pages.dart';
+
 class SellerStoreSetupView extends StatelessWidget {
   const SellerStoreSetupView({super.key});
 
@@ -41,16 +43,19 @@ class SellerStoreSetupView extends StatelessWidget {
                 'Store Name',
                 user?.businessName ?? 'Premium Store',
                 Icons.store_outlined,
+                onTap: () => Get.toNamed(Routes.storeBasicInfo),
               ),
               _setupItem(
                 'Store Description',
                 'Quality gadgets from China...',
                 Icons.description_outlined,
+                onTap: () => Get.toNamed(Routes.storeBasicInfo),
               ),
               _setupItem(
                 'Contact Email',
                 user?.email ?? 'store@example.com',
                 Icons.email_outlined,
+                onTap: () => Get.toNamed(Routes.storeBasicInfo),
               ),
             ]),
             const SizedBox(height: 24),
@@ -59,11 +64,13 @@ class SellerStoreSetupView extends StatelessWidget {
                 'Tax ID / CAC',
                 user?.cacNumber ?? 'Not set',
                 Icons.description_outlined,
+                onTap: () => Get.toNamed(Routes.storeVerification),
               ),
               _setupItem(
                 'Bank Details',
                 user?.bankDetails ?? 'Not set',
                 Icons.account_balance_outlined,
+                onTap: () => Get.toNamed(Routes.storeVerification),
               ),
             ]),
             const SizedBox(height: 24),
@@ -72,16 +79,19 @@ class SellerStoreSetupView extends StatelessWidget {
                 'Shipping Rates',
                 'Set your delivery fees',
                 Icons.local_shipping_outlined,
+                onTap: () => Get.toNamed(Routes.storeOperations),
               ),
               _setupItem(
                 'Return Policy',
                 '30-day easy returns',
                 Icons.assignment_return_outlined,
+                onTap: () => Get.toNamed(Routes.storeOperations),
               ),
               _setupItem(
                 'Working Hours',
                 'Mon - Sat, 9AM - 6PM',
                 Icons.access_time,
+                onTap: () => Get.toNamed(Routes.storeOperations),
               ),
             ]),
           ],
@@ -177,7 +187,12 @@ class SellerStoreSetupView extends StatelessWidget {
     );
   }
 
-  Widget _setupItem(String title, String value, IconData icon) {
+  Widget _setupItem(
+    String title,
+    String value,
+    IconData icon, {
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.black54, size: 20),
       title: Text(
@@ -189,7 +204,7 @@ class SellerStoreSetupView extends StatelessWidget {
         style: TextStyle(color: Colors.grey[600], fontSize: 13),
       ),
       trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 }

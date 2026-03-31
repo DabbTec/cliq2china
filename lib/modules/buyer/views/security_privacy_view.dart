@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../routes/app_pages.dart';
 
 class SecurityPrivacyView extends StatelessWidget {
   const SecurityPrivacyView({super.key});
@@ -28,28 +29,60 @@ class SecurityPrivacyView extends StatelessWidget {
             'Change Password',
             'Update your account password regularly',
             Icons.lock_outline,
-            () {},
+            () => Get.toNamed(Routes.changePassword),
           ),
           const SizedBox(height: 16),
           _buildSecurityItem(
             'Privacy Policy',
             'Read our full privacy statement',
             Icons.policy_outlined,
-            () {},
+            () => Get.toNamed(Routes.privacyPolicy),
           ),
           const SizedBox(height: 16),
           _buildSecurityItem(
             'Terms of Service',
             'Our agreement with you',
             Icons.description_outlined,
-            () {},
+            () => Get.toNamed(Routes.termsOfService),
           ),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
             height: 56,
             child: TextButton(
-              onPressed: () {},
+              onPressed: () {
+                Get.dialog(
+                  AlertDialog(
+                    title: const Text('Delete Account'),
+                    content: const Text(
+                      'Are you sure you want to delete your account? This action cannot be undone.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Get.back(),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          // Implement account deletion
+                          Get.back();
+                          Get.snackbar(
+                            'Account Deleted',
+                            'Your account has been deleted successfully',
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                          );
+                        },
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.red,
                 shape: RoundedRectangleBorder(

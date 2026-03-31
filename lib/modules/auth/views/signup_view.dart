@@ -47,6 +47,7 @@ class _SignupViewState extends State<SignupView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: false, // Parent dashboard handles this
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
