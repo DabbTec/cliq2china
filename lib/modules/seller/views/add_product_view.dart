@@ -631,6 +631,9 @@ class _AddProductViewState extends State<AddProductView> {
                   SizedBox(height: 32.h),
                   _buildSectionHeader('PRODUCT VARIANTS', Icons.style_outlined),
                   _buildVariantsSection(),
+                        minimumSize: Size(double.infinity, 50.h),
+                      ),
+                    ),
                   SizedBox(height: 48.h),
                   Obx(
                     () => PrimaryButton(
@@ -921,37 +924,37 @@ class _AddProductViewState extends State<AddProductView> {
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _moqTiers.length,
                   separatorBuilder: (context, index) =>
-                      const Divider(color: Colors.black12),
-                  itemBuilder: (context, index) {
-                    final tier = _moqTiers[index];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
+                    );
+                    final totalLocalPrice = localPrice * tier.minQty;
                       leading: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.05),
                           shape: BoxShape.circle,
                         ),
-                        child: Text(
-                          '${index + 1}',
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.grey[100],
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
                           ),
-                        ),
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        'Buy ${tier.minQty}${tier.maxQty != null ? ' - ${tier.maxQty}' : '+'} units',
                       ),
                       title: Text(
-                        'Buy ${tier.minQty}${tier.maxQty != null ? ' - ${tier.maxQty}' : '+'} units',
+                        'Buy ${tier.minQty}+ units',
                         style: AppTypography.bodyMedium.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
                       subtitle: Text(
                         'Wholesale Price: ¥${tier.pricePerUnit}',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.error,
                           fontWeight: FontWeight.w600,
+                                  '${CurrencyService.to.localCurrencySymbol}${totalLocalPrice.toStringAsFixed(2)}',
+                            ),
+                          ],
                         ),
                       ),
                       trailing: IconButton(
