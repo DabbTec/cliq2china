@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -26,11 +27,12 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
   final RxBool _showSearchBar = false.obs;
   final Rx<ProductModel?> _detailedProduct = Rx<ProductModel?>(null);
   final RxBool _isLoading = true.obs;
+  final RxBool _isPreview = false.obs;
   final ProductRepository _productRepository = ProductRepository();
 
-  final RxString _selectedColor = ''.obs;
-  final RxString _selectedSize = ''.obs;
-  final RxDouble _currentPrice = 0.0.obs;
+  // REPLACE _currentPrice with these two strict trackers
+  final RxDouble _currentYuanPrice = 0.0.obs;
+  final RxDouble _currentLocalPrice = 0.0.obs;
   final RxInt _selectedQty = 1.obs;
 
   String _formatPrice(double value) {
@@ -48,10 +50,6 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
         );
   }
 
-  String _formatYuan(double yuan) {
-    return _formatPrice(yuan);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -61,17 +59,19 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     if (args != null && args['product'] != null) {
       final ProductModel initialProduct = args['product'] as ProductModel;
       _detailedProduct.value = initialProduct;
+      _isPreview.value = args['isPreview'] ?? false;
 
-      // Prioritize displayYuan from backend, then fallback to originalPriceYuan or price
-      _currentPrice.value = initialProduct.effectiveYuan;
-
-      // Set initial MOQ
+      // Set initial MOQ based on the lowest MOQ tier, not the raw base price.
       int initialMOQ = 1;
       if (initialProduct.moqTiers != null &&
           initialProduct.moqTiers!.isNotEmpty) {
-        initialMOQ = initialProduct.moqTiers!.first.minQty;
+        final firstTier = initialProduct.moqTiers!.reduce(
+          (a, b) => a.minQty < b.minQty ? a : b,
+        );
+        initialMOQ = firstTier.minQty;
       }
       _selectedQty.value = initialMOQ;
+      _updatePrice();
     }
 
     // 2. Setup scroll listener
@@ -84,7 +84,11 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     });
 
     // 3. Fetch full details in background
-    _fetchProductDetails();
+    if (!_isPreview.value) {
+      _fetchProductDetails();
+    } else {
+      _isLoading.value = false;
+    }
   }
 
   Future<void> _fetchProductDetails() async {
@@ -95,33 +99,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
           product.id,
         );
         _detailedProduct.value = fullProduct;
-        _currentPrice.value = _calculatePrice(fullProduct, _selectedQty.value);
-
-        // Initialize variants if available
-        if (fullProduct.variants != null && fullProduct.variants!.isNotEmpty) {
-          final colors = fullProduct.variants!
-              .where((v) => v.type == 'Color')
-              .toList();
-          if (colors.isNotEmpty) {
-            _selectedColor.value = colors.first.value;
-            if (colors.first.price != null && colors.first.price! > 0) {
-              _currentPrice.value = colors.first.price!;
-            }
-          }
-
-          final sizes = fullProduct.variants!
-              .where((v) => v.type == 'Size')
-              .toList();
-          if (sizes.isNotEmpty) {
-            _selectedSize.value = sizes.first.value;
-            // If color didn't set a price, maybe size does
-            if (_currentPrice.value == fullProduct.price &&
-                sizes.first.price != null &&
-                sizes.first.price! > 0) {
-              _currentPrice.value = sizes.first.price!;
-            }
-          }
-        }
+        _updatePrice();
       } catch (e) {
         debugPrint('Error fetching product details: $e');
       } finally {
@@ -130,46 +108,64 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     }
   }
 
-  double _calculatePrice(ProductModel product, int qty) {
+  double _calculateYuanPrice(ProductModel product, int qty) {
     if (product.moqTiers == null || product.moqTiers!.isEmpty) {
       return product.effectiveYuan;
     }
-
-    for (var tier in product.moqTiers!) {
-      if (qty >= tier.minQty && (tier.maxQty == null || qty <= tier.maxQty!)) {
+    final sortedTiers = List<MOQTier>.from(product.moqTiers!)
+      ..sort((a, b) => b.minQty.compareTo(a.minQty));
+    for (var tier in sortedTiers) {
+      if (qty >= tier.minQty) {
+        // If backend provides a total yuan price for the tier, calculate unit price
+        if (tier.yuanPrice != null && tier.yuanPrice! > 0) {
+          return tier.yuanPrice! / tier.minQty;
+        }
         return tier.pricePerUnit;
       }
     }
-    return product.originalPriceYuan ?? product.price;
+    final firstTier = sortedTiers.last;
+    if (firstTier.yuanPrice != null && firstTier.yuanPrice! > 0) {
+      return firstTier.yuanPrice! / firstTier.minQty;
+    }
+    return firstTier.pricePerUnit;
+  }
+
+  double _calculateLocalPrice(ProductModel product, int qty) {
+    if (product.moqTiers == null || product.moqTiers!.isEmpty) {
+      return product.effectiveLocal;
+    }
+    final sortedTiers = List<MOQTier>.from(product.moqTiers!)
+      ..sort((a, b) => b.minQty.compareTo(a.minQty));
+    for (var tier in sortedTiers) {
+      if (qty >= tier.minQty) {
+        // PRIORITY: Use the exact backend total local price if it exists to get unit price
+        if (tier.localPrice != null && tier.localPrice! > 0) {
+          return tier.localPrice! / tier.minQty;
+        }
+        return CurrencyService.to.convertFromYuan(
+          tier.yuanPrice ?? tier.pricePerUnit,
+        );
+      }
+    }
+    final firstTier = sortedTiers.last;
+    if (firstTier.localPrice != null && firstTier.localPrice! > 0) {
+      return firstTier.localPrice! / firstTier.minQty;
+    }
+    return CurrencyService.to.convertFromYuan(
+      firstTier.yuanPrice ?? firstTier.pricePerUnit,
+    );
   }
 
   void _updatePrice() {
     final product = _detailedProduct.value;
     if (product == null) return;
 
-    double basePrice = _calculatePrice(product, _selectedQty.value);
-
-    // If variants are used and a specific variant is selected, it might have its own price.
-    // Usually tiered pricing and variant pricing might conflict or need careful merging.
-    // For now, if tiered pricing is active, it takes priority over base variant price
-    // but variant selection is still tracked.
-
-    final matchingVariant = product.variants?.firstWhereOrNull((v) {
-      if (_selectedColor.value.isNotEmpty && _selectedSize.value.isNotEmpty) {
-        return v.value == _selectedColor.value ||
-            v.value == _selectedSize.value;
-      }
-      return v.value == _selectedColor.value || v.value == _selectedSize.value;
-    });
-
-    if (matchingVariant != null &&
-        matchingVariant.price != null &&
-        matchingVariant.price! > 0 &&
-        (product.moqTiers == null || product.moqTiers!.isEmpty)) {
-      _currentPrice.value = matchingVariant.price!;
-    } else {
-      _currentPrice.value = basePrice;
-    }
+    // Explicitly set both values without dynamic multiplication
+    _currentYuanPrice.value = _calculateYuanPrice(product, _selectedQty.value);
+    _currentLocalPrice.value = _calculateLocalPrice(
+      product,
+      _selectedQty.value,
+    );
   }
 
   @override
@@ -198,7 +194,6 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
       }
 
       final controller = Get.find<BuyerController>();
-      final cartItem = controller.findCartItem(product.id);
 
       // Filter gallery to avoid duplicating the main image
       final displayGallery = [
@@ -230,6 +225,14 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                           itemCount: displayGallery.length,
                           itemBuilder: (context, index) {
                             final imgUrl = displayGallery[index];
+                            if (_isPreview.value &&
+                                !imgUrl.startsWith('http')) {
+                              return Image.file(
+                                File(imgUrl),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              );
+                            }
                             return CachedNetworkImage(
                               imageUrl: imgUrl,
                               fit: BoxFit.cover,
@@ -312,7 +315,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   ),
                   actions: [
                     Obx(
-                      () => !_showSearchBar.value
+                      () => !_showSearchBar.value && !_isPreview.value
                           ? Row(
                               children: [
                                 IconButton(
@@ -343,46 +346,47 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                             )
                           : const SizedBox.shrink(),
                     ),
-                    Stack(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.shopping_cart_outlined,
-                            color: Colors.black,
-                            size: 22.sp,
-                          ),
-                          onPressed: () => Get.toNamed(
-                            Routes.buyerDashboard,
-                            arguments: {'index': 4},
-                          ),
-                        ),
-                        if (controller.cartItems.isNotEmpty)
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: BoxConstraints(
-                                minWidth: 14.w,
-                                minHeight: 14.w,
-                              ),
-                              child: Text(
-                                '${controller.cartItems.length}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                    if (!_isPreview.value)
+                      Stack(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.shopping_cart_outlined,
+                              color: Colors.black,
+                              size: 22.sp,
+                            ),
+                            onPressed: () => Get.toNamed(
+                              Routes.buyerDashboard,
+                              arguments: {'index': 4},
                             ),
                           ),
-                      ],
-                    ),
+                          if (controller.cartItems.isNotEmpty)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                constraints: BoxConstraints(
+                                  minWidth: 14.w,
+                                  minHeight: 14.w,
+                                ),
+                                child: Text(
+                                  '${controller.cartItems.length}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8.sp,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     SizedBox(width: 8.w),
                   ],
                 ),
@@ -423,7 +427,12 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                     width: 2,
                                   ),
                                   image: DecorationImage(
-                                    image: CachedNetworkImageProvider(imgUrl),
+                                    image:
+                                        (_isPreview.value &&
+                                            !imgUrl.startsWith('http'))
+                                        ? FileImage(File(imgUrl))
+                                              as ImageProvider
+                                        : CachedNetworkImageProvider(imgUrl),
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -463,61 +472,21 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                     ),
                                   ),
                                 ),
-                              Text(
-                                '¥',
-                                style: TextStyle(
-                                  color: AppColors.error,
-                                  fontSize: 18.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
                               Obx(() {
-                                final unitYuan =
-                                    (product.displayYuan != null &&
-                                        product.displayYuan! > 0)
-                                    ? product.displayYuan!
-                                    : _currentPrice.value;
-                                final displayYuan =
-                                    unitYuan * _selectedQty.value;
-                                return _isLoading.value && displayYuan == 0
-                                    ? Container(
-                                        width: 80.w,
-                                        height: 30.h,
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[200],
-                                          borderRadius: BorderRadius.circular(
-                                            4.r,
-                                          ),
-                                        ),
-                                      )
-                                    : Text(
-                                        displayYuan > 0
-                                            ? _formatYuan(displayYuan)
-                                            : '',
-                                        style: TextStyle(
-                                          color: AppColors.error,
-                                          fontSize: 28.sp,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      );
-                              }),
-                              SizedBox(width: 12.w),
-                              Text(
-                                '≈',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 18.sp,
-                                ),
-                              ),
-                              SizedBox(width: 12.w),
-                              Obx(() {
-                                // Access observables to ensure GetX tracks this widget
+                                // 1. Main Price Display (Both Yuan & Local)
+                                // Trigger update on location change
                                 CurrencyService.to.currentLocation.value;
-                                final currentPrice = _currentPrice.value;
 
-                                if (_isLoading.value &&
-                                    currentPrice == 0 &&
-                                    product.displayPrice == null) {
+                                // Always calculate based on current reactive state
+                                final double unitYuan = _currentYuanPrice.value;
+                                final double unitLocal =
+                                    _currentLocalPrice.value;
+                                final int qty = _selectedQty.value;
+
+                                final double totalYuan = unitYuan * qty;
+                                final double totalLocal = unitLocal * qty;
+
+                                if (_isLoading.value && totalLocal == 0) {
                                   return Container(
                                     width: 100.w,
                                     height: 25.h,
@@ -528,51 +497,51 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                   );
                                 }
 
-                                // Priority 1: Use pre-calculated display fields from backend
-                                if (product.displayPrice != null &&
-                                    product.displaySymbol != null) {
-                                  final displayLocal =
-                                      product.displayPrice! *
-                                      _selectedQty.value;
-                                  final symbol = product.displaySymbol!;
-                                  final decimals = displayLocal.abs() < 1
-                                      ? 3
-                                      : displayLocal.abs() < 100
-                                      ? 2
-                                      : 0;
-                                  final formattedLocal = displayLocal
-                                      .toStringAsFixed(decimals)
-                                      .replaceAllMapped(
-                                        RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                                        (Match m) => "${m[1]},",
-                                      );
-                                  return Text(
-                                    '$symbol $formattedLocal',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 20.sp,
-                                      fontWeight: FontWeight.w900,
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      '¥',
+                                      style: TextStyle(
+                                        color: AppColors.error,
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                     ),
-                                  );
-                                }
-
-                                // Priority 2: Fallback to frontend calculation
-                                final unitYuan =
-                                    (product.displayYuan != null &&
-                                        product.displayYuan! > 0)
-                                    ? product.displayYuan!
-                                    : _currentPrice.value;
-                                final displayYuan =
-                                    unitYuan * _selectedQty.value;
-                                final localPrice = CurrencyService.to
-                                    .convertFromYuan(displayYuan);
-                                return Text(
-                                  '${product.effectiveSymbol} ${_formatPrice(localPrice)}',
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 20.sp,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                                    Text(
+                                      _formatPrice(totalYuan),
+                                      style: TextStyle(
+                                        color: AppColors.error,
+                                        fontSize: 24.sp,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    SizedBox(width: 8.w),
+                                    Text(
+                                      '(≈ ${product.effectiveSymbol}${_formatPrice(totalLocal)})',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    if (product.moqTiers != null &&
+                                        product.moqTiers!.isNotEmpty)
+                                      Padding(
+                                        padding: EdgeInsets.only(left: 12.w),
+                                        child: Text(
+                                          '${_selectedQty.value} pcs',
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 );
                               }),
                             ],
@@ -808,167 +777,173 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                 ),
 
                 // 6. Buyer Reviews
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Buyer Reviews (${product.reviews.where((r) => r['comment'] != null && r['comment'].toString().trim().isNotEmpty).length})',
-                              style: AppTypography.h3,
-                            ),
-                            if (product.reviews.any(
-                              (r) =>
-                                  r['comment'] != null &&
-                                  r['comment'].toString().trim().isNotEmpty,
-                            ))
-                              TextButton(
-                                onPressed: () {},
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Buyer Reviews (${product.reviews.where((r) => r['comment'] != null && r['comment'].toString().trim().isNotEmpty).length})',
+                                style: AppTypography.h3,
+                              ),
+                              if (product.reviews.any(
+                                (r) =>
+                                    r['comment'] != null &&
+                                    r['comment'].toString().trim().isNotEmpty,
+                              ))
+                                TextButton(
+                                  onPressed: () {},
+                                  child: Text(
+                                    'View All',
+                                    style: TextStyle(
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (product.reviews.isEmpty ||
+                              !product.reviews.any(
+                                (r) =>
+                                    r['comment'] != null &&
+                                    r['comment'].toString().trim().isNotEmpty,
+                              ))
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20.h),
+                              child: Center(
                                 child: Text(
-                                  'View All',
+                                  'No reviews with comments yet.',
                                   style: TextStyle(
-                                    color: Colors.blue[700],
-                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                    fontSize: 14.sp,
+                                    fontStyle: FontStyle.italic,
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                        if (product.reviews.isEmpty ||
-                            !product.reviews.any(
-                              (r) =>
-                                  r['comment'] != null &&
-                                  r['comment'].toString().trim().isNotEmpty,
-                            ))
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20.h),
-                            child: Center(
-                              child: Text(
-                                'No reviews with comments yet.',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14.sp,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
+                            )
+                          else
+                            Column(
+                              children: product.reviews
+                                  .where(
+                                    (r) =>
+                                        r['comment'] != null &&
+                                        r['comment']
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty,
+                                  )
+                                  .take(3)
+                                  .map((r) => _buildReviewItem(r))
+                                  .toList(),
                             ),
-                          )
-                        else
-                          Column(
-                            children: product.reviews
-                                .where(
-                                  (r) =>
-                                      r['comment'] != null &&
-                                      r['comment'].toString().trim().isNotEmpty,
-                                )
-                                .take(3)
-                                .map((r) => _buildReviewItem(r))
-                                .toList(),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 // 7. Similar Products
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Similar Products', style: AppTypography.h3),
-                        SizedBox(height: 16.h),
-                        SizedBox(
-                          height: 240.h,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: controller.products.length,
-                            itemBuilder: (context, index) {
-                              final p = controller.products[index];
-                              return Container(
-                                width: 160.w,
-                                margin: EdgeInsets.only(right: 15.w),
-                                child: ProductCard(
-                                  title: p.name,
-                                  price: p.price,
-                                  originalPriceYuan: p.originalPriceYuan,
-                                  moqTiers: p.moqTiers,
-                                  displayPrice: p.displayPrice,
-                                  displayYuan: p.displayYuan,
-                                  displaySymbol: p.displaySymbol,
-                                  imageUrl: p.imageUrl,
-                                  rating: p.rating,
-                                  stock: p.stock,
-                                  onTap: () => Get.toNamed(
-                                    Routes.productDetails,
-                                    arguments: {'product': p},
-                                    preventDuplicates: false,
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Similar Products', style: AppTypography.h3),
+                          SizedBox(height: 16.h),
+                          SizedBox(
+                            height: 240.h,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: controller.products.length,
+                              itemBuilder: (context, index) {
+                                final p = controller.products[index];
+                                return Container(
+                                  width: 160.w,
+                                  margin: EdgeInsets.only(right: 15.w),
+                                  child: ProductCard(
+                                    title: p.name,
+                                    price: p.price,
+                                    originalPriceYuan: p.originalPriceYuan,
+                                    moqTiers: p.moqTiers,
+                                    displayPrice: p.displayPrice,
+                                    displayYuan: p.displayYuan,
+                                    displaySymbol: p.displaySymbol,
+                                    imageUrl: p.imageUrl,
+                                    rating: p.rating,
+                                    stock: p.stock,
+                                    onTap: () => Get.toNamed(
+                                      Routes.productDetails,
+                                      arguments: {'product': p},
+                                      preventDuplicates: false,
+                                    ),
+                                    onAddToCart: () => controller.addToCart(p),
                                   ),
-                                  onAddToCart: () => controller.addToCart(p),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 // 8. Most Viewed Products
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Most Viewed Products', style: AppTypography.h3),
-                        SizedBox(height: 16.h),
-                        SizedBox(
-                          height: 240.h,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: controller.products.reversed.length,
-                            itemBuilder: (context, index) {
-                              final p = controller.products.reversed
-                                  .toList()[index];
-                              return Container(
-                                width: 160.w,
-                                margin: EdgeInsets.only(right: 15.w),
-                                child: ProductCard(
-                                  title: p.name,
-                                  price: p.price,
-                                  originalPriceYuan: p.originalPriceYuan,
-                                  moqTiers: p.moqTiers,
-                                  imageUrl: p.imageUrl,
-                                  rating: p.rating,
-                                  stock: p.stock,
-                                  onTap: () => Get.toNamed(
-                                    Routes.productDetails,
-                                    arguments: {'product': p},
-                                    preventDuplicates: false,
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Most Viewed Products', style: AppTypography.h3),
+                          SizedBox(height: 16.h),
+                          SizedBox(
+                            height: 240.h,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: controller.products.reversed.length,
+                              itemBuilder: (context, index) {
+                                final p = controller.products.reversed
+                                    .toList()[index];
+                                return Container(
+                                  width: 160.w,
+                                  margin: EdgeInsets.only(right: 15.w),
+                                  child: ProductCard(
+                                    title: p.name,
+                                    price: p.price,
+                                    originalPriceYuan: p.originalPriceYuan,
+                                    moqTiers: p.moqTiers,
+                                    imageUrl: p.imageUrl,
+                                    rating: p.rating,
+                                    stock: p.stock,
+                                    onTap: () => Get.toNamed(
+                                      Routes.productDetails,
+                                      arguments: {'product': p},
+                                      preventDuplicates: false,
+                                    ),
+                                    onAddToCart: () => controller.addToCart(p),
                                   ),
-                                  onAddToCart: () => controller.addToCart(p),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 SliverToBoxAdapter(child: SizedBox(height: 100.h)),
               ],
@@ -992,109 +967,121 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   ],
                 ),
                 child: SafeArea(
-                  child: Row(
-                    children: [
-                      _buildBottomIconButton(Icons.chat_bubble_outline, 'Chat'),
-                      SizedBox(width: 20.w),
-                      GestureDetector(
-                        onTap: () => Get.toNamed(
-                          Routes.store,
-                          arguments: {
-                            'sellerId': product.sellerId,
-                            'sellerName':
-                                product.store?.name ?? 'Official Store',
-                          },
-                        ),
-                        child: _buildBottomIconButton(
-                          Icons.store_outlined,
-                          'Store',
-                        ),
-                      ),
-                      SizedBox(width: 20.w),
-                      Expanded(
-                        child: Row(
+                  child: _isPreview.value
+                      ? PrimaryButton(
+                          text: 'Back to Edit Product',
+                          onPressed: () => Get.back(),
+                          color: Colors.black,
+                          textColor: Colors.white,
+                        )
+                      : Row(
                           children: [
+                            _buildBottomIconButton(
+                              Icons.chat_bubble_outline,
+                              'Chat',
+                              onTap: null,
+                            ),
+                            SizedBox(width: 20.w),
+                            GestureDetector(
+                              onTap: () => Get.toNamed(
+                                Routes.store,
+                                arguments: {
+                                  'sellerId': product.sellerId,
+                                  'sellerName':
+                                      product.store?.name ??
+                                      product.seller?.businessName ??
+                                      'Unnamed Store',
+                                },
+                              ),
+                              child: _buildBottomIconButton(
+                                Icons.store_outlined,
+                                'Store',
+                              ),
+                            ),
+                            SizedBox(width: 20.w),
                             Expanded(
-                              child: GestureDetector(
-                                onTap: product.stock <= 0
-                                    ? null
-                                    : () {
-                                        _showQtyPicker(product);
-                                      },
-                                child: Container(
-                                  height: 48.h,
-                                  decoration: BoxDecoration(
-                                    color: product.stock <= 0
-                                        ? Colors.grey[200]
-                                        : const Color(0xFFFFF1F1),
-                                    borderRadius: BorderRadius.horizontal(
-                                      left: Radius.circular(24.r),
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Obx(
-                                    () => Text(
-                                      product.stock <= 0
-                                          ? 'Out of Stock'
-                                          : 'Qty: ${_selectedQty.value}',
-                                      style: TextStyle(
-                                        color: product.stock <= 0
-                                            ? Colors.grey
-                                            : Colors.red[400],
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14.sp,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: product.stock <= 0
+                                          ? null
+                                          : () {
+                                              _showQtyPicker(product);
+                                            },
+                                      child: Container(
+                                        height: 48.h,
+                                        decoration: BoxDecoration(
+                                          color: product.stock <= 0
+                                              ? Colors.grey[200]
+                                              : const Color(0xFFFFF1F1),
+                                          borderRadius: BorderRadius.horizontal(
+                                            left: Radius.circular(24.r),
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Obx(
+                                          () => Text(
+                                            product.stock <= 0
+                                                ? 'Out of Stock'
+                                                : 'Qty: ${_selectedQty.value}',
+                                            style: TextStyle(
+                                              color: product.stock <= 0
+                                                  ? Colors.grey
+                                                  : Colors.red[400],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14.sp,
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: GestureDetector(
-                                onTap: product.stock <= 0
-                                    ? null
-                                    : () {
-                                        if (cartItem == null) {
-                                          controller.addToCart(
-                                            product,
-                                            quantity: _selectedQty.value,
-                                          );
-                                        }
-                                        Get.toNamed(
-                                          Routes.buyerDashboard,
-                                          arguments: {'index': 4},
-                                        );
-                                      },
-                                child: Container(
-                                  height: 48.h,
-                                  decoration: BoxDecoration(
-                                    color: product.stock <= 0
-                                        ? Colors.grey[400]
-                                        : Colors.blue[700],
-                                    borderRadius: BorderRadius.horizontal(
-                                      right: Radius.circular(24.r),
+                                  Expanded(
+                                    flex: 1,
+                                    child: GestureDetector(
+                                      onTap: product.stock <= 0
+                                          ? null
+                                          : () {
+                                              // Always update/add to cart with the selected quantity
+                                              controller.addToCart(
+                                                product,
+                                                quantity: _selectedQty.value,
+                                              );
+                                              Get.toNamed(
+                                                Routes.buyerDashboard,
+                                                arguments: {'index': 4},
+                                              );
+                                            },
+                                      child: Container(
+                                        height: 48.h,
+                                        decoration: BoxDecoration(
+                                          color: product.stock <= 0
+                                              ? Colors.grey[400]
+                                              : Colors.blue[700],
+                                          borderRadius: BorderRadius.horizontal(
+                                            right: Radius.circular(24.r),
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          product.stock <= 0
+                                              ? 'Not Available'
+                                              : 'Go to Cart',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14.sp,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    product.stock <= 0
-                                        ? 'Not Available'
-                                        : 'Go to Cart',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -1139,13 +1126,20 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   index == sortedTiers.length - 1 && sortedTiers.length > 1;
 
               return Obx(() {
-                final bool active =
-                    _selectedQty.value >= tier.minQty &&
-                    (tier.maxQty == null || _selectedQty.value <= tier.maxQty!);
+                // FIX: Ensure only ONE tier is highlighted at a time
+                bool active = false;
+                if (index == sortedTiers.length - 1) {
+                  active = _selectedQty.value >= tier.minQty;
+                } else {
+                  active =
+                      _selectedQty.value >= tier.minQty &&
+                      _selectedQty.value < sortedTiers[index + 1].minQty;
+                }
 
                 return GestureDetector(
                   onTap: () {
-                    _selectedQty.value = tier.maxQty ?? tier.minQty;
+                    // FIX: Automatically set qty to the start of the selected tier
+                    _selectedQty.value = tier.minQty;
                     _updatePrice();
                   },
                   child: Container(
@@ -1193,7 +1187,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                '${tier.maxQty ?? tier.minQty} pcs',
+                                '${tier.minQty} pcs',
                                 style: TextStyle(
                                   fontSize: 13.sp,
                                   color: active
@@ -1205,43 +1199,73 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                 ),
                               ),
                               SizedBox(height: 6.h),
-                              FittedBox(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '¥',
-                                      style: TextStyle(
-                                        fontSize: 12.sp,
-                                        color: AppColors.error,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      _formatPrice(tier.pricePerUnit),
-                                      style: TextStyle(
-                                        fontSize: 22.sp,
-                                        color: AppColors.error,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
                               Obx(() {
-                                // Ensure GetX tracks location changes
+                                // Track location
                                 final _ =
                                     CurrencyService.to.currentLocation.value;
-                                final localPrice = CurrencyService.to
-                                    .convertFromYuan(tier.pricePerUnit);
-                                return Text(
-                                  '≈ ${CurrencyService.to.localCurrencySymbol}${_formatPrice(localPrice)}',
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+
+                                // Calculate Total Prices using prioritized backend data
+                                double localTotalPrice;
+                                double yuanTotalPrice;
+
+                                if (tier.localPrice != null &&
+                                    tier.localPrice! > 0) {
+                                  // Backend provides TOTAL price for this MOQ tier
+                                  localTotalPrice = tier.localPrice!;
+                                  yuanTotalPrice =
+                                      tier.yuanPrice ??
+                                      (tier.pricePerUnit * tier.minQty);
+                                } else {
+                                  // Fallback: Convert unit price to local and multiply by minQty
+                                  final unitYuan =
+                                      tier.yuanPrice ?? tier.pricePerUnit;
+                                  yuanTotalPrice = unitYuan * tier.minQty;
+                                  final localUnitPrice = CurrencyService.to
+                                      .convertFromYuan(unitYuan);
+                                  localTotalPrice =
+                                      localUnitPrice * tier.minQty;
+                                }
+
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.baseline,
+                                      textBaseline: TextBaseline.alphabetic,
+                                      children: [
+                                        Text(
+                                          '¥',
+                                          style: TextStyle(
+                                            fontSize: 10.sp,
+                                            color: AppColors.error,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        Text(
+                                          _formatPrice(yuanTotalPrice),
+                                          style: TextStyle(
+                                            fontSize: 14.sp,
+                                            color: AppColors.error,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 2.h),
+                                    Text(
+                                      '(≈ ${CurrencyService.to.localCurrencySymbol}${_formatPrice(localTotalPrice)})',
+                                      style: TextStyle(
+                                        fontSize: 11.sp,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
                                 );
                               }),
                             ],
@@ -1305,12 +1329,11 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
         ),
         SizedBox(height: 12.h),
         Obx(() {
-          final currentTier = sortedTiers.firstWhereOrNull(
-            (t) =>
-                _selectedQty.value >= t.minQty &&
-                (t.maxQty == null || _selectedQty.value <= t.maxQty!),
-          );
-          if (currentTier == null) return const SizedBox.shrink();
+          // FIX: Reliably find the current active tier for this alert box
+          final currentTierCandidates = sortedTiers
+              .where((t) => _selectedQty.value >= t.minQty)
+              .toList();
+          if (currentTierCandidates.isEmpty) return const SizedBox.shrink();
 
           final nextTier = sortedTiers.firstWhereOrNull(
             (t) => t.minQty > _selectedQty.value,
@@ -1420,17 +1443,24 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     );
   }
 
-  Widget _buildBottomIconButton(IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 22.sp, color: Colors.black87),
-        SizedBox(height: 4.h),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11.sp, color: Colors.grey[600]),
-        ),
-      ],
+  Widget _buildBottomIconButton(
+    IconData icon,
+    String label, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22.sp, color: Colors.black87),
+          SizedBox(height: 4.h),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11.sp, color: Colors.grey[600]),
+          ),
+        ],
+      ),
     );
   }
 

@@ -183,6 +183,21 @@ class SearchView extends GetView<BuyerController> {
                                 color: Colors.black,
                               ),
                             ),
+                            if ((product.store?.name ??
+                                    product.seller?.businessName) !=
+                                null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                product.store?.name ??
+                                    product.seller?.businessName ??
+                                    '',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 8),
                             FittedBox(
                               fit: BoxFit.scaleDown,
@@ -190,22 +205,6 @@ class SearchView extends GetView<BuyerController> {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  if (product.moqTiers != null &&
-                                      product.moqTiers!.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        right: 6,
-                                        bottom: 2,
-                                      ),
-                                      child: Text(
-                                        'Starting from',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
                                   Text(
                                     '¥',
                                     style: TextStyle(
@@ -226,28 +225,15 @@ class SearchView extends GetView<BuyerController> {
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    '≈',
+                                    '(≈ ',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[400],
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
                                   Obx(() {
                                     // Ensure GetX tracks location changes for fallback or symbol updates
                                     CurrencyService.to.currentLocation.value;
-
-                                    if (product.displayPrice != null &&
-                                        product.displaySymbol != null) {
-                                      return Text(
-                                        '${product.displaySymbol}${product.displayPrice!.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black,
-                                        ),
-                                      );
-                                    }
 
                                     final localPrice = product.effectiveLocal;
                                     if (localPrice == 0) {
@@ -272,6 +258,28 @@ class SearchView extends GetView<BuyerController> {
                                       ),
                                     );
                                   }),
+                                  Text(
+                                    ')',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ),
+                                  if ((product.moqTiers != null &&
+                                          product.moqTiers!.isNotEmpty) ||
+                                      (product.minQty != null &&
+                                          product.minQty! > 1))
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Text(
+                                        '${product.moqTiers?.first.minQty ?? product.minQty} pcs',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),

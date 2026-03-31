@@ -68,6 +68,7 @@ class _LoginViewState extends State<LoginView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: false, // Parent dashboard handles this
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -318,7 +319,12 @@ class _LoginViewState extends State<LoginView> {
       key: const ValueKey('login_form'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTextField('Email', emailController, hint: 'example@email.com'),
+        _buildTextField(
+          'Email',
+          emailController,
+          hint: 'example@email.com',
+          keyboardType: TextInputType.emailAddress,
+        ),
         const SizedBox(height: 16),
         _buildTextField(
           'Password',
@@ -537,6 +543,7 @@ class _LoginViewState extends State<LoginView> {
           'Email',
           buyerEmailController,
           hint: 'example@email.com',
+          keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
         _buildPhoneField('Phone Number', buyerPhoneController),
@@ -584,6 +591,7 @@ class _LoginViewState extends State<LoginView> {
           'Business Email',
           businessEmailController,
           hint: 'business@email.com',
+          keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
         _buildPhoneField('Business Phone', businessPhoneController),
@@ -626,6 +634,7 @@ class _LoginViewState extends State<LoginView> {
     VoidCallback? onToggleVisibility,
     String? Function(String?)? validator,
     Widget? prefixIcon,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -643,6 +652,7 @@ class _LoginViewState extends State<LoginView> {
           controller: controller,
           obscureText: isPassword ? obscureText : false,
           style: const TextStyle(fontSize: 14),
+          keyboardType: keyboardType,
           validator:
               validator ??
               (value) {

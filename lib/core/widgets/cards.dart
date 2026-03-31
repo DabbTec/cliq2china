@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../core/constants/colors.dart';
 import '../utils/currency_service.dart';
 import '../../data/models/product.dart';
 
@@ -22,11 +24,13 @@ class ProductCard extends StatelessWidget {
   final bool isInCart; // Track if product is already in cart
   final bool isInWishlist;
   final int stock;
+  final int? minQty; // NEW: Minimum order quantity at root level
   final List<MOQTier>? moqTiers; // NEW: MOQ Tiers for price fallback
   final double? displayPrice; // NEW: Pre-calculated price from backend
   final double? displayYuan; // NEW: Pre-calculated Yuan from backend
   final String? displaySymbol; // NEW: Pre-calculated symbol from backend
   final String? currency; // NEW: Seller currency code
+  final String? storeName; // VERIFIED: Real store name
 
   const ProductCard({
     super.key,
@@ -46,46 +50,76 @@ class ProductCard extends StatelessWidget {
     this.isInCart = false,
     this.isInWishlist = false,
     this.stock = 1,
+    this.minQty,
     this.moqTiers,
     this.displayPrice,
     this.displayYuan,
     this.displaySymbol,
     this.currency,
+    this.storeName,
   });
 
   double get effectiveYuanPrice {
-    if (displayYuan != null && displayYuan! > 0) {
-      return displayYuan!;
-    }
-    if (originalPriceYuan != null && originalPriceYuan! > 0) {
-      return originalPriceYuan!;
-    }
     if (moqTiers != null && moqTiers!.isNotEmpty) {
-      return moqTiers!.first.pricePerUnit;
+      final firstTier = moqTiers!.first;
+      // Prioritize total tier price from backend
+      if (firstTier.yuanPrice != null && firstTier.yuanPrice! > 0) {
+        return firstTier.yuanPrice!;
+      }
+      return firstTier.pricePerUnit * firstTier.minQty;
     }
 
-    if (currency != null &&
-        currency!.isNotEmpty &&
-        currency!.toUpperCase() != 'CNY') {
-      final rate =
-          CurrencyService.to.rates[currency!.toUpperCase()]?.rateToYuan;
-      if (rate != null && rate > 0) {
-        return price / rate;
+    // Fallback to unit price multiplied by root-level MOQ
+    double unitYuan = price;
+    if (displayYuan != null && displayYuan! > 0) {
+      unitYuan = displayYuan!;
+    } else if (originalPriceYuan != null && originalPriceYuan! > 0) {
+      unitYuan = originalPriceYuan!;
+    } else {
+      if (currency != null &&
+          currency!.isNotEmpty &&
+          currency!.toUpperCase() != 'CNY') {
+        final rate =
+            CurrencyService.to.rates[currency!.toUpperCase()]?.rateToYuan;
+        if (rate != null && rate > 0) {
+          unitYuan = price / rate;
+        }
       }
     }
 
-    return price;
+    if (minQty != null && minQty! > 1) {
+      return unitYuan * minQty!;
+    }
+    return unitYuan;
   }
 
   double get effectiveLocalPrice {
+    if (moqTiers != null && moqTiers!.isNotEmpty) {
+      final firstTier = moqTiers!.first;
+      // Prioritize total tier price from backend
+      if (firstTier.localPrice != null && firstTier.localPrice! > 0) {
+        return firstTier.localPrice!;
+      }
+      return CurrencyService.to.convertFromYuan(effectiveYuanPrice);
+    }
+
+    // Fallback to total price based on effectiveYuanPrice (which handles minQty)
     if (displayPrice != null && displayPrice! > 0) {
+      if (minQty != null && minQty! > 1) {
+        return displayPrice! * minQty!;
+      }
       return displayPrice!;
     }
+
     if (currency != null &&
         currency!.isNotEmpty &&
         currency!.toUpperCase() != 'CNY') {
+      if (minQty != null && minQty! > 1) {
+        return price * minQty!;
+      }
       return price;
     }
+
     return CurrencyService.to.convertFromYuan(effectiveYuanPrice);
   }
 
@@ -222,25 +256,16 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  SizedBox(height: 4.h),
-
-                  // Trending Status Row + Mini Cart
+                  // Store Name, Sliding Status & Cart Button Row
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
-                        child: Text(
-                          trendingStatus ?? '✨ Recommended',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF444444),
-                            fontSize: 10.sp, // Slightly smaller font
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Expanded(
+                        child: _SlidingLabelTicker(
+                          storeName: storeName,
+                          status: trendingStatus,
                         ),
                       ),
-                      SizedBox(width: 4.w),
+                      const SizedBox(width: 4),
                       // Small Cart Button
                       GestureDetector(
                         onTap: (isInCart || stock <= 0) ? null : onAddToCart,
@@ -306,18 +331,6 @@ class ProductCard extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        if (moqTiers != null && moqTiers!.isNotEmpty)
-                          Padding(
-                            padding: EdgeInsets.only(right: 4.w, bottom: 2.h),
-                            child: Text(
-                              'Starting from',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 9.sp,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
                         Text(
                           '¥',
                           style: TextStyle(
@@ -327,9 +340,7 @@ class ProductCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          (displayYuan != null && displayYuan! > 0)
-                              ? _formatValue(displayYuan!)
-                              : effectiveYuanPrice == 0
+                          effectiveYuanPrice == 0
                               ? ''
                               : _formatValue(effectiveYuanPrice),
                           style: TextStyle(
@@ -339,18 +350,16 @@ class ProductCard extends StatelessWidget {
                             letterSpacing: -0.5,
                           ),
                         ),
-                        if ((displayYuan != null && displayYuan! > 0) ||
-                            effectiveYuanPrice > 0) ...[
+                        if (effectiveYuanPrice > 0) ...[
                           SizedBox(width: 4.w), // Reduced from 6
                           Text(
-                            '≈',
+                            '(≈ ',
                             style: TextStyle(
                               color: Colors.grey[400],
                               fontSize: 11.sp, // Reduced from 12
                             ),
                           ),
                         ],
-                        SizedBox(width: 4.w),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -358,61 +367,62 @@ class ProductCard extends StatelessWidget {
                               displaySymbol ??
                                   CurrencyService.to.localCurrencySymbol,
                               style: TextStyle(
-                                color: Colors.black, // Secondary Black
+                                color: Colors.grey[600],
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11.sp,
                               ),
                             ),
                             const SizedBox(width: 2),
-                            if (displayPrice != null)
-                              Text(
-                                displayPrice!
-                                    .toStringAsFixed(
-                                      displayPrice! < 100 ? 2 : 0,
-                                    )
-                                    .replaceAllMapped(
-                                      RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"),
-                                      (Match m) => "${m[1]},",
-                                    ),
+                            Obx(() {
+                              // Explicitly access the observable to ensure GetX tracks it
+                              final _ =
+                                  CurrencyService.to.currentLocation.value;
+
+                              if (effectiveYuanPrice == 0) {
+                                return Container(
+                                  width: 50.w,
+                                  height: 14.h,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(4.r),
+                                  ),
+                                );
+                              }
+
+                              final localPrice = effectiveLocalPrice;
+                              return Text(
+                                _formatValue(localPrice),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.black, // Secondary Black
+                                  color: Colors.grey[600],
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13.sp,
                                 ),
-                              )
-                            else
-                              Obx(() {
-                                // Explicitly access the observable to ensure GetX tracks it
-                                final _ =
-                                    CurrencyService.to.currentLocation.value;
-
-                                if (effectiveYuanPrice == 0) {
-                                  return Container(
-                                    width: 50.w,
-                                    height: 14.h,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(4.r),
-                                    ),
-                                  );
-                                }
-
-                                final localPrice = effectiveLocalPrice;
-                                return Text(
-                                  _formatValue(localPrice),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.black, // Secondary Black
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13.sp,
-                                  ),
-                                );
-                              }),
+                              );
+                            }),
+                            Text(
+                              ')',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 11.sp,
+                              ),
+                            ),
                           ],
                         ),
+                        if ((moqTiers != null && moqTiers!.isNotEmpty) ||
+                            (minQty != null && minQty! > 1))
+                          Padding(
+                            padding: EdgeInsets.only(left: 6.w, bottom: 2.h),
+                            child: Text(
+                              '${moqTiers?.first.minQty ?? minQty} pcs',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -422,6 +432,111 @@ class ProductCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SlidingLabelTicker extends StatefulWidget {
+  final String? storeName;
+  final String? status;
+  const _SlidingLabelTicker({this.storeName, this.status});
+
+  @override
+  State<_SlidingLabelTicker> createState() => _SlidingLabelTickerState();
+}
+
+class _SlidingLabelTickerState extends State<_SlidingLabelTicker> {
+  List<String> _fullLabels = [];
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateLabels();
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted && _fullLabels.length > 1) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % _fullLabels.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_SlidingLabelTicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.storeName != widget.storeName ||
+        oldWidget.status != widget.status) {
+      _updateLabels();
+    }
+  }
+
+  void _updateLabels() {
+    _fullLabels = [];
+    if (widget.storeName != null && widget.storeName!.isNotEmpty) {
+      _fullLabels.add(widget.storeName!);
+    }
+    if (widget.status != null && widget.status!.isNotEmpty) {
+      _fullLabels.add(widget.status!);
+    }
+
+    if (_currentIndex >= _fullLabels.length) {
+      _currentIndex = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_fullLabels.isEmpty) return const SizedBox.shrink();
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 600),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        final inAnimation = Tween<Offset>(
+          begin: const Offset(0.0, -1.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut));
+
+        final outAnimation = Tween<Offset>(
+          begin: const Offset(0.0, 1.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut));
+
+        return ClipRect(
+          child: SlideTransition(
+            position: child.key == ValueKey(_currentIndex)
+                ? inAnimation
+                : outAnimation,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        key: ValueKey(_currentIndex),
+        height: 14.h,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _fullLabels[_currentIndex],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _fullLabels[_currentIndex] == widget.storeName
+                ? Colors.grey[600]
+                : AppColors.primary, // Use Brand Color (Blue) for status
+            fontSize: 9.sp,
+            fontWeight: _fullLabels[_currentIndex] == widget.storeName
+                ? FontWeight.w600
+                : FontWeight.w900,
+          ),
         ),
       ),
     );

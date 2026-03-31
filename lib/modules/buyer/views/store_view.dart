@@ -14,7 +14,7 @@ class StoreView extends GetView<BuyerController> {
   Widget build(BuildContext context) {
     final Map<String, dynamic> args = Get.arguments ?? {};
     final String sellerId = args['sellerId'] ?? '';
-    final String sellerName = args['sellerName'] ?? 'Official Store';
+    final String sellerName = args['sellerName'] ?? 'Unnamed Store';
     final List<ProductModel> storeProducts = controller.getProductsBySeller(
       sellerId,
     );
@@ -166,6 +166,7 @@ class StoreView extends GetView<BuyerController> {
                       title: product.name,
                       price: product.price,
                       originalPriceYuan: product.originalPriceYuan,
+                      minQty: product.minQty,
                       moqTiers: product.moqTiers,
                       displayPrice: product.displayPrice,
                       displayYuan: product.displayYuan,

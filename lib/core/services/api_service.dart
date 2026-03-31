@@ -35,6 +35,14 @@ class ApiService extends GetxService {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
+          // Debug log for requests
+          if (kDebugMode) {
+            debugPrint('🚀 API Request: ${options.method} ${options.path}');
+            if (options.data != null) {
+              debugPrint('📦 Payload: ${options.data}');
+            }
+          }
+
           // Add Currency Parameter automatically
           try {
             final currencyService = Get.find<CurrencyService>();
@@ -48,6 +56,15 @@ class ApiService extends GetxService {
           }
 
           return handler.next(options);
+        },
+        onResponse: (response, handler) {
+          if (kDebugMode) {
+            debugPrint(
+              '✅ API Response: ${response.statusCode} ${response.requestOptions.path}',
+            );
+            debugPrint('📄 Data: ${response.data}');
+          }
+          return handler.next(response);
         },
         onError: (DioException e, handler) async {
           if (e.response?.statusCode == 401 &&
