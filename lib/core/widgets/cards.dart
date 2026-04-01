@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../core/constants/colors.dart';
 import '../utils/currency_service.dart';
 import '../../data/models/product.dart';
 
@@ -254,39 +256,16 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  if (storeName != null && storeName!.isNotEmpty) ...[
-                    SizedBox(height: 2.h),
-                    Text(
-                      storeName!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-
-                  SizedBox(height: 4.h),
-
-                  // Trending Status Row + Mini Cart
+                  // Store Name, Sliding Status & Cart Button Row
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
-                        child: Text(
-                          trendingStatus ?? '✨ Recommended',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF444444),
-                            fontSize: 10.sp, // Slightly smaller font
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Expanded(
+                        child: _SlidingLabelTicker(
+                          storeName: storeName,
+                          status: trendingStatus,
                         ),
                       ),
-                      SizedBox(width: 4.w),
+                      const SizedBox(width: 4),
                       // Small Cart Button
                       GestureDetector(
                         onTap: (isInCart || stock <= 0) ? null : onAddToCart,
@@ -436,7 +415,7 @@ class ProductCard extends StatelessWidget {
                           Padding(
                             padding: EdgeInsets.only(left: 6.w, bottom: 2.h),
                             child: Text(
-                              '${moqTiers?.first.minQty ?? minQty} pcs',
+                              '${moqTiers?.first.minQty ?? minQty}${moqTiers?.first.maxQty != null ? ' - ${moqTiers!.first.maxQty}' : '+'} pcs',
                               style: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 11.sp,
@@ -453,6 +432,111 @@ class ProductCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SlidingLabelTicker extends StatefulWidget {
+  final String? storeName;
+  final String? status;
+  const _SlidingLabelTicker({this.storeName, this.status});
+
+  @override
+  State<_SlidingLabelTicker> createState() => _SlidingLabelTickerState();
+}
+
+class _SlidingLabelTickerState extends State<_SlidingLabelTicker> {
+  List<String> _fullLabels = [];
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateLabels();
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted && _fullLabels.length > 1) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % _fullLabels.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_SlidingLabelTicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.storeName != widget.storeName ||
+        oldWidget.status != widget.status) {
+      _updateLabels();
+    }
+  }
+
+  void _updateLabels() {
+    _fullLabels = [];
+    if (widget.storeName != null && widget.storeName!.isNotEmpty) {
+      _fullLabels.add(widget.storeName!);
+    }
+    if (widget.status != null && widget.status!.isNotEmpty) {
+      _fullLabels.add(widget.status!);
+    }
+
+    if (_currentIndex >= _fullLabels.length) {
+      _currentIndex = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_fullLabels.isEmpty) return const SizedBox.shrink();
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 600),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        final inAnimation = Tween<Offset>(
+          begin: const Offset(0.0, -1.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut));
+
+        final outAnimation = Tween<Offset>(
+          begin: const Offset(0.0, 1.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut));
+
+        return ClipRect(
+          child: SlideTransition(
+            position: child.key == ValueKey(_currentIndex)
+                ? inAnimation
+                : outAnimation,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        key: ValueKey(_currentIndex),
+        height: 14.h,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _fullLabels[_currentIndex],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _fullLabels[_currentIndex] == widget.storeName
+                ? Colors.grey[600]
+                : AppColors.primary, // Use Brand Color (Blue) for status
+            fontSize: 9.sp,
+            fontWeight: _fullLabels[_currentIndex] == widget.storeName
+                ? FontWeight.w600
+                : FontWeight.w900,
+          ),
         ),
       ),
     );

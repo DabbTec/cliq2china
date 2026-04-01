@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../auth/auth_controller.dart';
+import '../../seller_controller.dart';
 
-class BasicInfoView extends StatelessWidget {
+class BasicInfoView extends GetView<SellerController> {
   const BasicInfoView({super.key});
 
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
-    final user = authController.user.value;
+    final store = controller.store.value;
 
     final TextEditingController nameController = TextEditingController(
-      text: user?.businessName ?? '',
+      text: controller.storeName,
     );
     final TextEditingController descriptionController = TextEditingController(
-      text: 'Quality gadgets from China...',
+      text: store?.description ?? '',
     );
     final TextEditingController emailController = TextEditingController(
-      text: user?.email ?? '',
+      text: store?.email ?? authController.user.value?.email ?? '',
     );
 
     return Scaffold(
@@ -68,39 +69,53 @@ class BasicInfoView extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _buildTextField(
-              'Contact Email',
+              'Contact Email (Constant)',
               emailController,
               Icons.email_outlined,
+              enabled: false,
             ),
             const SizedBox(height: 48),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Save logic here
-                  Get.back();
-                  Get.snackbar(
-                    'Success',
-                    'Store information updated successfully',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.green,
-                    colorText: Colors.white,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            Obx(
+              () => SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: controller.isUpdatingStore.value
+                      ? null
+                      : () {
+                          if (nameController.text.trim().isEmpty) {
+                            Get.snackbar(
+                              'Error',
+                              'Store Name cannot be empty',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.red.withValues(
+                                alpha: 0.1,
+                              ),
+                              colorText: Colors.red,
+                            );
+                            return;
+                          }
+                          controller.updateStoreInfo({
+                            'name': nameController.text,
+                            'description': descriptionController.text,
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Save Changes',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+                  child: controller.isUpdatingStore.value
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -115,6 +130,7 @@ class BasicInfoView extends StatelessWidget {
     TextEditingController controller,
     IconData icon, {
     int maxLines = 1,
+    bool enabled = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,10 +147,11 @@ class BasicInfoView extends StatelessWidget {
         TextField(
           controller: controller,
           maxLines: maxLines,
+          enabled: enabled,
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
             filled: true,
-            fillColor: const Color(0xFFF8F9FA),
+            fillColor: enabled ? const Color(0xFFF8F9FA) : Colors.grey[100],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,

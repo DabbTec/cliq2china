@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../auth/auth_controller.dart';
+import '../../seller_controller.dart';
 
-class VerificationView extends StatelessWidget {
+class VerificationView extends GetView<SellerController> {
   const VerificationView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.find<AuthController>();
-    final user = authController.user.value;
+    final store = controller.store.value;
 
     final TextEditingController taxIdController = TextEditingController(
-      text: user?.cacNumber ?? '',
+      text: controller.verificationStatus['tax_id'] ?? '',
     );
     final TextEditingController bankNameController = TextEditingController(
-      text: 'Access Bank',
+      text: store?.metadata?['bank_name'] ?? '',
     );
     final TextEditingController accountNoController = TextEditingController(
-      text: user?.bankDetails ?? '',
+      text: store?.metadata?['bank_account'] ?? '',
     );
 
     return Scaffold(
@@ -54,65 +53,58 @@ class VerificationView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'These details are required for legal compliance and to receive payments.',
+              'Submit your details for verification and payout setup.',
               style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             ),
             const SizedBox(height: 32),
             _buildTextField(
-              'Tax ID / CAC Registration',
+              'Tax ID / CAC Number',
               taxIdController,
               Icons.description_outlined,
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Bank Information',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
             _buildTextField(
               'Bank Name',
               bankNameController,
               Icons.account_balance_outlined,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildTextField(
               'Account Number',
               accountNoController,
-              Icons.account_balance_wallet_outlined,
+              Icons.credit_card_outlined,
             ),
             const SizedBox(height: 48),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Save logic here
-                  Get.back();
-                  Get.snackbar(
-                    'Success',
-                    'Verification details updated successfully',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.green,
-                    colorText: Colors.white,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            Obx(
+              () => SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: controller.isLoading.value
+                      ? null
+                      : () {
+                          controller.submitNewVerification({
+                            'tax_id': taxIdController.text,
+                            'bank_name': bankNameController.text,
+                            'bank_account': accountNoController.text,
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Update Details',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+                  child: controller.isLoading.value
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Submit Verification',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ),

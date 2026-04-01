@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import '../../core/services/api_service.dart';
 import '../../core/constants/api_endpoints.dart';
+import '../../core/utils/exceptions.dart';
 import '../models/user.dart';
 
 class AuthRepository {
@@ -16,7 +17,7 @@ class AuthRepository {
     if (data['status'] == 'success') {
       return data;
     } else {
-      throw Exception(data['message'] ?? 'Login failed');
+      throw ApiException(data['message'] ?? 'Login failed');
     }
   }
 
@@ -39,7 +40,7 @@ class AuthRepository {
     if (data['status'] == 'success') {
       return UserModel.fromJson(data['user']);
     } else {
-      throw Exception(data['message'] ?? 'Signup failed');
+      throw ApiException(data['message'] ?? 'Signup failed');
     }
   }
 
@@ -52,7 +53,56 @@ class AuthRepository {
     if (data['status'] == 'success') {
       return UserModel.fromJson(data['user']);
     } else {
-      throw Exception(data['message'] ?? 'Failed to fetch profile');
+      throw ApiException(data['message'] ?? 'Failed to fetch profile');
+    }
+  }
+
+  Future<void> changePassword({
+    required String userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await _apiService.post(
+      ApiEndpoints.changePassword,
+      data: {
+        'user_id': userId,
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+    );
+    final data = response.data;
+    if (data['status'] != 'success') {
+      throw ApiException(data['message'] ?? 'Failed to change password');
+    }
+  }
+
+  Future<void> requestPasswordReset(String email) async {
+    final response = await _apiService.post(
+      ApiEndpoints.forgotPassword,
+      data: {'email': email.trim().toLowerCase()},
+    );
+    final data = response.data;
+    if (data['status'] != 'success') {
+      throw ApiException(data['message'] ?? 'Failed to request password reset');
+    }
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String verificationCode,
+    required String newPassword,
+  }) async {
+    final response = await _apiService.post(
+      ApiEndpoints.resetPassword,
+      data: {
+        'email': email.trim().toLowerCase(),
+        'verification_code': verificationCode.trim(),
+        'new_password': newPassword,
+      },
+    );
+    final data = response.data;
+    if (data['status'] != 'success') {
+      throw ApiException(data['message'] ?? 'Failed to reset password');
     }
   }
 }

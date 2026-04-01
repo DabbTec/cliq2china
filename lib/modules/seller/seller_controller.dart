@@ -1,18 +1,38 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../core/constants/colors.dart';
 import '../../data/models/product.dart';
+import '../../data/models/seller_stats.dart';
+import '../../data/models/store.dart';
 import '../../data/repositories/product_repository.dart';
+import '../../data/repositories/seller_repository.dart';
 import '../auth/auth_controller.dart';
 
 class SellerController extends GetxController {
   final ProductRepository _productRepository = ProductRepository();
+  final SellerRepository _sellerRepository = SellerRepository();
   final AuthController _authController = Get.find<AuthController>();
+
+  // Product Observables
   final RxList<ProductModel> myProducts = <ProductModel>[].obs;
   final RxInt currentTabIndex = 1.obs; // Default to Home (index 1)
   final RxString selectedStatus = 'active'.obs; // 'active', 'archived', 'draft'
   final RxList<String> selectedProductIds = <String>[].obs;
   final RxBool isSettingsMode = false.obs;
   final RxBool isLoading = false.obs;
+  final RxBool isUpdatingStore = false.obs;
+
+  // Stats & Dashboard
+  final Rx<SellerStatsModel?> stats = Rx<SellerStatsModel?>(null);
+  final Rx<StoreModel?> store = Rx<StoreModel?>(null);
+  final RxList<Map<String, dynamic>> payouts = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> promotions = <Map<String, dynamic>>[].obs;
+  final RxMap<String, dynamic> verificationStatus = <String, dynamic>{}.obs;
+
+  String get storeName =>
+      store.value?.name ??
+      _authController.user.value?.businessName ??
+      'My Store';
 
   // Menu Expansion State
   final RxBool isOrdersExpanded = false.obs;
@@ -40,7 +60,179 @@ class SellerController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadMyProducts();
+    loadDashboardData();
+  }
+
+  Future<void> loadDashboardData() async {
+    isLoading.value = true;
+    try {
+      final sellerId = _authController.user.value?.id;
+      if (sellerId == null) {
+        debugPrint('⚠️ Cannot load dashboard: Seller ID is null');
+        return;
+      }
+
+      // Parallel data fetching
+      await Future.wait([
+        loadMyProducts(),
+        loadStats(sellerId),
+        loadStore(sellerId),
+        loadPayouts(sellerId),
+        loadPromotions(sellerId),
+        loadVerification(sellerId),
+      ]);
+    } catch (e) {
+      debugPrint('❌ Error loading dashboard data: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadStats(String sellerId) async {
+    try {
+      final s = await _sellerRepository.getStats(sellerId);
+      stats.value = s;
+      debugPrint(
+        '✅ Stats loaded: ${s.totalProducts} products, ${s.totalOrders} orders',
+      );
+    } catch (e) {
+      debugPrint('❌ Error loading stats: $e');
+    }
+  }
+
+  Future<void> loadStore(String sellerId) async {
+    try {
+      final s = await _sellerRepository.getStore(sellerId);
+      store.value = s;
+    } catch (e) {
+      print('Error loading store: $e');
+    }
+  }
+
+  Future<void> loadPayouts(String sellerId) async {
+    try {
+      final p = await _sellerRepository.getPayouts(sellerId);
+      payouts.assignAll(p);
+    } catch (e) {
+      print('Error loading payouts: $e');
+    }
+  }
+
+  Future<void> loadPromotions(String sellerId) async {
+    try {
+      final p = await _sellerRepository.getPromotions(sellerId);
+      promotions.assignAll(p);
+    } catch (e) {
+      print('Error loading promotions: $e');
+    }
+  }
+
+  Future<void> loadVerification(String sellerId) async {
+    try {
+      final v = await _sellerRepository.getVerification(sellerId);
+      verificationStatus.assignAll(v);
+    } catch (e) {
+      print('Error loading verification: $e');
+    }
+  }
+
+  Future<void> updateStoreInfo(Map<String, dynamic> data) async {
+    final sellerId = _authController.user.value?.id;
+
+    if (store.value == null) {
+      if (sellerId != null) {
+        // Try to reload store data once if it's missing
+        await loadStore(sellerId);
+      }
+
+      if (store.value == null) {
+        Get.snackbar(
+          'Error',
+          'Store data not found. Please ensure your store is set up properly.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.error.withValues(alpha: 0.1),
+          colorText: AppColors.error,
+        );
+        return;
+      }
+    }
+
+    isUpdatingStore.value = true;
+    try {
+      final updatedStore = await _sellerRepository.updateStore(
+        store.value!.id,
+        data,
+      );
+      store.value = updatedStore;
+      Get.snackbar(
+        'Success',
+        'Store updated successfully',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.success.withValues(alpha: 0.1),
+        colorText: AppColors.success,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to update store: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.error.withValues(alpha: 0.1),
+        colorText: AppColors.error,
+      );
+    } finally {
+      isUpdatingStore.value = false;
+    }
+  }
+
+  Future<void> requestNewPayout(Map<String, dynamic> data) async {
+    final sellerId = _authController.user.value?.id;
+    if (sellerId == null) return;
+
+    isLoading.value = true;
+    try {
+      await _sellerRepository.requestPayout({...data, 'seller_id': sellerId});
+      await loadPayouts(sellerId);
+      Get.snackbar('Success', 'Payout requested successfully');
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to request payout: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> createNewPromotion(Map<String, dynamic> data) async {
+    final sellerId = _authController.user.value?.id;
+    if (sellerId == null) return;
+
+    isLoading.value = true;
+    try {
+      await _sellerRepository.createPromotion({...data, 'seller_id': sellerId});
+      await loadPromotions(sellerId);
+      Get.snackbar('Success', 'Promotion created successfully');
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to create promotion: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> submitNewVerification(Map<String, dynamic> data) async {
+    final sellerId = _authController.user.value?.id;
+    if (sellerId == null) return;
+
+    isLoading.value = true;
+    try {
+      await _sellerRepository.submitVerification({
+        ...data,
+        'seller_id': sellerId,
+      });
+      await loadVerification(sellerId);
+      Get.snackbar('Success', 'Verification submitted successfully');
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to submit verification: ${e.toString()}');
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   void changeTab(int index) {
@@ -84,6 +276,10 @@ class SellerController extends GetxController {
       if (selectedStatus.value == newProduct.status) {
         myProducts.insert(0, newProduct);
       }
+      // Refresh stats to update total products count
+      final sellerId = _authController.user.value?.id;
+      if (sellerId != null) loadStats(sellerId);
+
       Get.back();
       Get.snackbar(
         'Success',
@@ -152,6 +348,11 @@ class SellerController extends GetxController {
     try {
       await _productRepository.deleteProduct(id);
       myProducts.removeWhere((p) => p.id == id);
+
+      // Refresh stats
+      final sellerId = _authController.user.value?.id;
+      if (sellerId != null) loadStats(sellerId);
+
       Get.snackbar(
         'Deleted',
         'Product deleted successfully',
@@ -175,6 +376,10 @@ class SellerController extends GetxController {
       myProducts.removeWhere((p) => selectedProductIds.contains(p.id));
       final count = selectedProductIds.length;
       selectedProductIds.clear();
+
+      // Refresh stats
+      final sellerId = _authController.user.value?.id;
+      if (sellerId != null) loadStats(sellerId);
 
       Get.snackbar(
         'Bulk Delete Success',

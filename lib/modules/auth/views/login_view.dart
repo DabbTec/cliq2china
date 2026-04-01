@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/widgets/password_strength_indicator.dart';
+import 'forgot_password_modal.dart';
 
 import '../auth_controller.dart';
 
@@ -361,7 +362,14 @@ class _LoginViewState extends State<LoginView> {
               ],
             ),
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const ForgotPasswordModal(),
+                );
+              },
               style: TextButton.styleFrom(padding: EdgeInsets.zero),
               child: const Text(
                 'Forgot Password?',

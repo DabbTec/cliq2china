@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../seller_controller.dart';
+import '../../../core/utils/currency_service.dart';
 
-class SellerAnalyticsView extends StatelessWidget {
+class SellerAnalyticsView extends GetView<SellerController> {
   const SellerAnalyticsView({super.key});
 
   @override
@@ -25,31 +27,36 @@ class SellerAnalyticsView extends StatelessWidget {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTimeFilter(),
-            const SizedBox(height: 24),
-            _buildMainMetrics(),
-            const SizedBox(height: 32),
-            const Text(
-              'SALES OVERVIEW',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                letterSpacing: 1,
-                color: Colors.grey,
+      body: Obx(() {
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTimeFilter(),
+              const SizedBox(height: 24),
+              _buildMainMetrics(),
+              const SizedBox(height: 32),
+              const Text(
+                'SALES OVERVIEW',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  color: Colors.grey,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            _buildChartPlaceholder(),
-            const SizedBox(height: 32),
-            _buildTopProducts(),
-          ],
-        ),
-      ),
+              const SizedBox(height: 16),
+              _buildChartPlaceholder(),
+              const SizedBox(height: 32),
+              _buildTopProducts(),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -92,13 +99,32 @@ class SellerAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildMainMetrics() {
+    final stats = controller.stats.value;
+    final salesYuan = stats?.totalSales ?? 0.0;
+    final localSales = CurrencyService.to.convertFromYuan(salesYuan);
+
     return Column(
       children: [
-        _metricRow('Total Revenue', '₦4,250,000', '+12.5%', Colors.green),
+        _metricRow(
+          'Total Revenue',
+          '${CurrencyService.to.localCurrencySymbol}${localSales.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+          '+12.5%',
+          Colors.green,
+        ),
         const SizedBox(height: 16),
-        _metricRow('Total Orders', '456', '+5.2%', Colors.green),
+        _metricRow(
+          'Total Orders',
+          '${stats?.totalOrders ?? 0}',
+          '+5.2%',
+          Colors.green,
+        ),
         const SizedBox(height: 16),
-        _metricRow('Store Visits', '12,450', '-2.1%', Colors.red),
+        _metricRow(
+          'Total Products',
+          '${stats?.totalProducts ?? 0}',
+          '${stats?.totalCustomers ?? 0} Customers',
+          Colors.blue,
+        ),
       ],
     );
   }
@@ -118,26 +144,31 @@ class SellerAnalyticsView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -160,20 +191,57 @@ class SellerAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildChartPlaceholder() {
+    final chartData = controller.stats.value?.salesChart ?? [];
+    if (chartData.isEmpty) {
+      return Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Icon(Icons.show_chart, size: 60, color: Colors.grey),
+        ),
+      );
+    }
     return Container(
       height: 200,
       width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Center(
-        child: Icon(Icons.show_chart, size: 60, color: Colors.grey),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: chartData.map((data) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Container(
+                width: 20,
+                height: (data.amount / 1000) * 100, // Very simple scaling
+                color: Colors.black,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                data.month,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
 
   Widget _buildTopProducts() {
+    final products = controller.myProducts.take(3).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -187,9 +255,16 @@ class SellerAnalyticsView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        _productItem('iPhone 15 Pro Max', '124 sales', '₦1.2M'),
-        _productItem('Samsung S24 Ultra', '89 sales', '₦950K'),
-        _productItem('MacBook Air M3', '45 sales', '₦2.4M'),
+        if (products.isEmpty)
+          const Text('No products found')
+        else
+          ...products.map(
+            (p) => _productItem(
+              p.name,
+              'Active',
+              '¥${p.price.toStringAsFixed(2)}',
+            ),
+          ),
       ],
     );
   }
@@ -203,27 +278,16 @@ class SellerAnalyticsView extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.image_outlined, color: Colors.grey),
-          ),
-          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   sales,
@@ -232,10 +296,7 @@ class SellerAnalyticsView extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            revenue,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-          ),
+          Text(revenue, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
     );

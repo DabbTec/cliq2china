@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../seller_controller.dart';
+import '../../../core/utils/currency_service.dart';
 
-class SellerPayoutsView extends StatelessWidget {
+class SellerPayoutsView extends GetView<SellerController> {
   const SellerPayoutsView({super.key});
 
   @override
@@ -25,20 +27,29 @@ class SellerPayoutsView extends StatelessWidget {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildBalanceCard(),
-            _buildPayoutStats(),
-            _buildTransactionHistory(),
-          ],
-        ),
-      ),
+      body: Obx(() {
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildBalanceCard(),
+              _buildPayoutStats(),
+              _buildTransactionHistory(),
+            ],
+          ),
+        );
+      }),
       bottomNavigationBar: _buildWithdrawButton(),
     );
   }
 
   Widget _buildBalanceCard() {
+    final stats = controller.stats.value;
+    final salesYuan = stats?.totalSales ?? 0.0;
+    final localSales = CurrencyService.to.convertFromYuan(salesYuan);
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(20),
@@ -66,20 +77,26 @@ class SellerPayoutsView extends StatelessWidget {
             style: TextStyle(color: Colors.white60, fontSize: 14),
           ),
           const SizedBox(height: 8),
-          const Text(
-            '₦2,450,000.00',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '${CurrencyService.to.localCurrencySymbol}${localSales.toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
           const SizedBox(height: 24),
           Row(
             children: [
-              _balanceInfo('Pending', '₦150,000'),
+              _balanceInfo(
+                'Pending',
+                '¥${(salesYuan * 0.1).toStringAsFixed(2)}',
+              ),
               const SizedBox(width: 24),
-              _balanceInfo('Next Payout', 'Oct 20'),
+              _balanceInfo('Next Payout', 'Scheduled'),
             ],
           ),
         ],
@@ -108,6 +125,10 @@ class SellerPayoutsView extends StatelessWidget {
   }
 
   Widget _buildPayoutStats() {
+    final stats = controller.stats.value;
+    final salesYuan = stats?.totalSales ?? 0.0;
+    final localSales = CurrencyService.to.convertFromYuan(salesYuan);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
@@ -115,7 +136,7 @@ class SellerPayoutsView extends StatelessWidget {
           Expanded(
             child: _statItem(
               'Total Earned',
-              '₦12.5M',
+              '${CurrencyService.to.localCurrencySymbol}${localSales.toStringAsFixed(1)}',
               Icons.trending_up,
               Colors.green,
             ),
@@ -124,7 +145,7 @@ class SellerPayoutsView extends StatelessWidget {
           Expanded(
             child: _statItem(
               'Withdrawals',
-              '₦10.0M',
+              '₦0.0',
               Icons.account_balance_wallet,
               Colors.blue,
             ),
@@ -146,9 +167,12 @@ class SellerPayoutsView extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
           ),
           Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
         ],
@@ -157,6 +181,7 @@ class SellerPayoutsView extends StatelessWidget {
   }
 
   Widget _buildTransactionHistory() {
+    final payouts = controller.payouts;
     return Container(
       margin: const EdgeInsets.only(top: 32),
       padding: const EdgeInsets.all(20),
@@ -180,24 +205,25 @@ class SellerPayoutsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          _transactionItem(
-            'Withdrawal to Bank',
-            '-₦500,000',
-            'Oct 15, 2024',
-            Colors.red,
-          ),
-          _transactionItem(
-            'Order Payment #1234',
-            '+₦45,000',
-            'Oct 14, 2024',
-            Colors.green,
-          ),
-          _transactionItem(
-            'Order Payment #1233',
-            '+₦12,500',
-            'Oct 14, 2024',
-            Colors.green,
-          ),
+          if (payouts.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40.0),
+                child: Text('No transactions yet'),
+              ),
+            )
+          else
+            ...payouts.map(
+              (p) => _transactionItem(
+                p['type'] ?? 'Payout',
+                '${p['amount']}',
+                p['date'] ?? '',
+                p['amount'].toString().startsWith('-')
+                    ? Colors.red
+                    : Colors.green,
+              ),
+            ),
+          const SizedBox(height: 100),
         ],
       ),
     );
@@ -209,23 +235,53 @@ class SellerPayoutsView extends StatelessWidget {
     String date,
     Color color,
   ) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-      ),
-      subtitle: Text(
-        date,
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
-      ),
-      trailing: Text(
-        amount,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w900,
-          fontSize: 14,
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  amount.startsWith('-') ? Icons.north_east : Icons.south_west,
+                  color: color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    date,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Text(
+            amount,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -233,20 +289,33 @@ class SellerPayoutsView extends StatelessWidget {
   Widget _buildWithdrawButton() {
     return Container(
       padding: const EdgeInsets.all(20),
-      color: Colors.white,
-      child: SafeArea(
-        child: ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.black,
-            minimumSize: const Size(double.infinity, 56),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
           ),
-          child: const Text(
-            'Withdraw Funds',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: () {
+          // Request payout logic
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.black,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: const Text(
+          'Request Payout',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
           ),
         ),
       ),

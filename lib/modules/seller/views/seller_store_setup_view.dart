@@ -1,18 +1,56 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/services/image_upload_service.dart';
 import '../../auth/auth_controller.dart';
-
+import '../seller_controller.dart';
 import '../../../routes/app_pages.dart';
 
-class SellerStoreSetupView extends StatelessWidget {
+class SellerStoreSetupView extends GetView<SellerController> {
   const SellerStoreSetupView({super.key});
+
+  Future<void> _pickAndUploadLogo() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      final uploadService = Get.find<ImageUploadService>();
+      Get.showOverlay(
+        asyncFunction: () async {
+          final url = await uploadService.uploadImage(File(image.path));
+          if (url != null) {
+            await controller.updateStoreInfo({'logo_url': url});
+          }
+        },
+        loadingWidget: const Center(child: CircularProgressIndicator()),
+      );
+    }
+  }
+
+  Future<void> _deleteLogo() async {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Delete Logo'),
+        content: const Text('Are you sure you want to delete your store logo?'),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Get.back();
+              await controller.updateStoreInfo({'logo_url': null});
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
-    final user = authController.user.value;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -32,77 +70,69 @@ class SellerStoreSetupView extends StatelessWidget {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _buildStoreHeader(),
-            const SizedBox(height: 24),
-            _buildSetupSection('BASIC INFO', [
-              _setupItem(
-                'Store Name',
-                user?.businessName ?? 'Premium Store',
-                Icons.store_outlined,
-                onTap: () => Get.toNamed(Routes.storeBasicInfo),
+      body: Obx(() {
+        final store = controller.store.value;
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final displayEmail =
+            store?.email ?? authController.user.value?.email ?? 'Not set';
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              _buildStoreHeader(
+                controller.storeName,
+                displayEmail,
+                controller.store.value?.logoUrl,
               ),
-              _setupItem(
-                'Store Description',
-                'Quality gadgets from China...',
-                Icons.description_outlined,
-                onTap: () => Get.toNamed(Routes.storeBasicInfo),
-              ),
-              _setupItem(
-                'Contact Email',
-                user?.email ?? 'store@example.com',
-                Icons.email_outlined,
-                onTap: () => Get.toNamed(Routes.storeBasicInfo),
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSetupSection('VERIFICATION & PAYOUTS', [
-              _setupItem(
-                'Tax ID / CAC',
-                user?.cacNumber ?? 'Not set',
-                Icons.description_outlined,
-                onTap: () => Get.toNamed(Routes.storeVerification),
-              ),
-              _setupItem(
-                'Bank Details',
-                user?.bankDetails ?? 'Not set',
-                Icons.account_balance_outlined,
-                onTap: () => Get.toNamed(Routes.storeVerification),
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSetupSection('OPERATIONS', [
-              _setupItem(
-                'Shipping Rates',
-                'Set your delivery fees',
-                Icons.local_shipping_outlined,
-                onTap: () => Get.toNamed(Routes.storeOperations),
-              ),
-              _setupItem(
-                'Return Policy',
-                '30-day easy returns',
-                Icons.assignment_return_outlined,
-                onTap: () => Get.toNamed(Routes.storeOperations),
-              ),
-              _setupItem(
-                'Working Hours',
-                'Mon - Sat, 9AM - 6PM',
-                Icons.access_time,
-                onTap: () => Get.toNamed(Routes.storeOperations),
-              ),
-            ]),
-          ],
-        ),
-      ),
+              const SizedBox(height: 24),
+              _buildSetupSection('BASIC INFO', [
+                _setupItem(
+                  'Store Name',
+                  controller.storeName,
+                  Icons.store_outlined,
+                  onTap: () => Get.toNamed(Routes.storeBasicInfo),
+                ),
+                _setupItem(
+                  'Store Description',
+                  store?.description ?? 'No description provided',
+                  Icons.description_outlined,
+                  onTap: () => Get.toNamed(Routes.storeBasicInfo),
+                ),
+                _setupItem(
+                  'Contact Email',
+                  displayEmail,
+                  Icons.email_outlined,
+                  onTap: () => Get.toNamed(Routes.storeBasicInfo),
+                ),
+              ]),
+              const SizedBox(height: 24),
+              _buildSetupSection('OPERATIONS', [
+                _setupItem(
+                  'Shipping Rates',
+                  store?.metadata?['shipping_rates'] ??
+                      'Set your delivery fees',
+                  Icons.local_shipping_outlined,
+                  onTap: () => Get.toNamed(Routes.storeOperations),
+                ),
+                _setupItem(
+                  'Return Policy',
+                  store?.metadata?['return_policy'] ?? '30-day easy returns',
+                  Icons.assignment_return_outlined,
+                  onTap: () => Get.toNamed(Routes.storeOperations),
+                ),
+              ]),
+            ],
+          ),
+        );
+      }),
     );
   }
 
-  Widget _buildStoreHeader() {
-    final authController = Get.find<AuthController>();
-    final user = authController.user.value;
+  Widget _buildStoreHeader(String name, String email, String? logoUrl) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -120,41 +150,76 @@ class SellerStoreSetupView extends StatelessWidget {
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 45,
-                backgroundColor: Colors.grey[100],
-                child: const Icon(Icons.store, size: 40, color: Colors.black26),
+              GestureDetector(
+                onTap: _pickAndUploadLogo,
+                child: CircleAvatar(
+                  radius: 45,
+                  backgroundColor: Colors.grey[100],
+                  backgroundImage: logoUrl != null
+                      ? NetworkImage(logoUrl)
+                      : null,
+                  child: logoUrl == null
+                      ? const Icon(Icons.store, size: 40, color: Colors.black26)
+                      : null,
+                ),
               ),
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
+                child: GestureDetector(
+                  onTap: _pickAndUploadLogo,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                   ),
-                  child: const Icon(Icons.edit, color: Colors.white, size: 14),
                 ),
               ),
+              if (logoUrl != null)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: _deleteLogo,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            user?.name ?? 'Premium Store',
+            name,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          Text(
-            user?.email ?? 'store@example.com',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
-          ),
+          Text(email, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
           const SizedBox(height: 12),
-          const Text(
-            'Update Store Logo',
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+          GestureDetector(
+            onTap: _pickAndUploadLogo,
+            child: const Text(
+              'Update Store Logo',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ),
         ],

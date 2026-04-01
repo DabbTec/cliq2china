@@ -9,6 +9,7 @@ import '../../core/services/token_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/app_update_service.dart';
 import '../../routes/app_pages.dart';
+import '../../core/utils/exceptions.dart';
 
 class AuthController extends GetxController {
   final AuthRepository _authRepository = AuthRepository();
@@ -72,6 +73,9 @@ class AuthController extends GetxController {
       final loggedInUser = UserModel.fromJson(response['user']);
       final tokens = response['tokens'];
 
+      final successMessage =
+          response['message'] ?? 'Welcome back, ${loggedInUser.name}!';
+
       user.value = loggedInUser;
 
       // Handle tokens
@@ -83,7 +87,7 @@ class AuthController extends GetxController {
 
       Get.snackbar(
         'Success',
-        'Welcome back, ${loggedInUser.name}!',
+        successMessage,
         snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.green.withValues(alpha: 0.1),
         colorText: Colors.green[800],
@@ -99,6 +103,14 @@ class AuthController extends GetxController {
           Get.find<BuyerController>().currentIndex.value = 3;
         }
       }
+    } on ApiException catch (e) {
+      Get.snackbar(
+        'Login Error',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
     } on DioException catch (e) {
       String message = 'Login failed';
       if (e.response != null) {
@@ -177,6 +189,15 @@ class AuthController extends GetxController {
       } else {
         Get.offAllNamed(Routes.login);
       }
+    } on ApiException catch (e) {
+      Get.snackbar(
+        'Signup Error',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+        duration: const Duration(seconds: 5),
+      );
     } on DioException catch (e) {
       String message = 'Signup failed';
       String? title;
@@ -206,6 +227,140 @@ class AuthController extends GetxController {
       );
     } catch (e) {
       Get.snackbar('Error', 'An unexpected error occurred during signup');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    if (user.value == null) return false;
+
+    isLoading.value = true;
+    try {
+      await _authRepository.changePassword(
+        userId: user.value!.id,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      Get.snackbar(
+        'Success',
+        'Your password has been updated successfully',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.green.withValues(alpha: 0.1),
+        colorText: Colors.green[800],
+      );
+      return true;
+    } on ApiException catch (e) {
+      Get.snackbar(
+        'Update Failed',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } catch (e) {
+      String errorMessage = e.toString();
+      if (errorMessage.startsWith('Exception: ')) {
+        errorMessage = errorMessage.replaceFirst('Exception: ', '');
+      }
+      Get.snackbar(
+        'Update Failed',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> requestPasswordReset(String email) async {
+    isLoading.value = true;
+    try {
+      await _authRepository.requestPasswordReset(email);
+      Get.snackbar(
+        'Verification Sent',
+        'A code has been sent to $email. Check your inbox to continue.',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.green.withValues(alpha: 0.1),
+        colorText: Colors.green[800],
+      );
+      return true;
+    } on ApiException catch (e) {
+      Get.snackbar(
+        'Request Failed',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } catch (e) {
+      var errorMessage = e.toString();
+      if (errorMessage.startsWith('Exception: ')) {
+        errorMessage = errorMessage.replaceFirst('Exception: ', '');
+      }
+      Get.snackbar(
+        'Request Failed',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> resetPassword({
+    required String email,
+    required String verificationCode,
+    required String newPassword,
+  }) async {
+    isLoading.value = true;
+    try {
+      await _authRepository.resetPassword(
+        email: email,
+        verificationCode: verificationCode,
+        newPassword: newPassword,
+      );
+      Get.snackbar(
+        'Password Reset',
+        'Your password has been updated successfully. Please log in with your new password.',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.green.withValues(alpha: 0.1),
+        colorText: Colors.green[800],
+      );
+      return true;
+    } on ApiException catch (e) {
+      Get.snackbar(
+        'Reset Failed',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } catch (e) {
+      var errorMessage = e.toString();
+      if (errorMessage.startsWith('Exception: ')) {
+        errorMessage = errorMessage.replaceFirst('Exception: ', '');
+      }
+      Get.snackbar(
+        'Reset Failed',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
     } finally {
       isLoading.value = false;
     }

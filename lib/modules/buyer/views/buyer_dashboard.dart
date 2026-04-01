@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../../core/constants/category_constants.dart';
 import '../../../data/models/product.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/utils/currency_service.dart';
@@ -1518,18 +1519,7 @@ class BuyerDashboard extends GetView<BuyerController> {
   }
 
   Widget _buildCategoriesView() {
-    final mainCategories = [
-      'Home & Office',
-      'Phones & Tablets',
-      'Fashion',
-      'Health & Beauty',
-      'Electronics',
-      'Computing',
-      'Grocery',
-      'Garden & Outdoors',
-      'Automobile',
-      'Sporting Goods',
-    ];
+    final mainCategories = CategoryConstants.categoryNames;
 
     return Row(
       children: [
@@ -1539,121 +1529,97 @@ class BuyerDashboard extends GetView<BuyerController> {
           child: ListView.builder(
             itemCount: mainCategories.length,
             itemBuilder: (context, index) {
-              final isSelected = index == 0;
-              return GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                    horizontal: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFF1F1F1) : Colors.white,
-                    border: isSelected
-                        ? const Border(
-                            left: BorderSide(
-                              color: AppColors.primary,
-                              width: 4,
-                            ),
-                          )
-                        : null,
-                  ),
-                  child: Text(
-                    mainCategories[index],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      color: isSelected ? AppColors.primary : Colors.black87,
+              final categoryName = mainCategories[index];
+              return Obx(() {
+                final isSelected =
+                    controller.selectedMainCategory.value == categoryName;
+                return GestureDetector(
+                  onTap: () =>
+                      controller.selectedMainCategory.value = categoryName,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                      horizontal: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFF1F1F1)
+                          : Colors.white,
+                      border: isSelected
+                          ? const Border(
+                              left: BorderSide(
+                                color: AppColors.primary,
+                                width: 4,
+                              ),
+                            )
+                          : null,
+                    ),
+                    child: Text(
+                      categoryName,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isSelected ? AppColors.primary : Colors.black87,
+                      ),
                     ),
                   ),
-                ),
-              );
+                );
+              });
             },
           ),
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+          child: Obx(() {
+            final selectedCategory = controller.selectedMainCategory.value;
+            return ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'All in $selectedCategory',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 14),
+                    ],
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'All Products',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildCategorySection('Appliances', [
-                {
-                  'name': 'Large Appliances',
-                  'image':
-                      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=200',
-                },
-                {
-                  'name': 'Small Appliances',
-                  'image':
-                      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=200',
-                },
-              ]),
-              const SizedBox(height: 12),
-              _buildCategorySection('Home & Kitchen', [
-                {
-                  'name': 'Cookware',
-                  'image':
-                      'https://images.unsplash.com/photo-1556911229-4d37c9536f75?q=80&w=200',
-                },
-                {
-                  'name': 'Small Appliances',
-                  'image':
-                      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=200',
-                },
-                {
-                  'name': 'Bakeware',
-                  'image':
-                      'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?q=80&w=200',
-                },
-                {
-                  'name': 'Cutlery & Knife Accessories',
-                  'image':
-                      'https://images.unsplash.com/photo-1591261730799-ee4e6c2d16d7?q=80&w=200',
-                },
-              ], showSeeAll: true),
-              const SizedBox(height: 12),
-              _buildCategorySection('Home', [
-                {
-                  'name': 'Bedding',
-                  'image':
-                      'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=200',
-                },
-                {
-                  'name': 'Decor',
-                  'image':
-                      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=200',
-                },
-                {
-                  'name': 'Furniture',
-                  'image':
-                      'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=200',
-                },
-              ]),
-              const SizedBox(height: 10),
-            ],
-          ),
+                const SizedBox(height: 12),
+                // Since sub-categories are not yet defined, we'll show some placeholder items
+                // for the selected category.
+                _buildCategorySection('Popular $selectedCategory', [
+                  {
+                    'name': 'Trending $selectedCategory',
+                    'image':
+                        'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=200',
+                  },
+                  {
+                    'name': 'New $selectedCategory',
+                    'image':
+                        'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=200',
+                  },
+                  {
+                    'name': 'Best $selectedCategory',
+                    'image':
+                        'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=200',
+                  },
+                ]),
+              ],
+            );
+          }),
         ),
       ],
     );

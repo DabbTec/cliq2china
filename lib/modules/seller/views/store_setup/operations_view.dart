@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../seller_controller.dart';
 
-class OperationsView extends StatelessWidget {
+class OperationsView extends GetView<SellerController> {
   const OperationsView({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final store = controller.store.value;
+
+    final TextEditingController shippingController = TextEditingController(
+      text: store?.metadata?['shipping_rates'] ?? '',
+    );
+    final TextEditingController return_policyController = TextEditingController(
+      text: store?.metadata?['return_policy'] ?? '',
+    );
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -47,45 +57,84 @@ class OperationsView extends StatelessWidget {
             _buildSectionTitle('Shipping'),
             _buildTextField(
               'Shipping Rates',
-              TextEditingController(text: 'Set your delivery fees'),
+              shippingController,
               Icons.local_shipping_outlined,
             ),
             const SizedBox(height: 24),
             _buildSectionTitle('Policies'),
             _buildTextField(
               'Return Policy',
-              TextEditingController(text: '30-day easy returns'),
+              return_policyController,
               Icons.assignment_return_outlined,
-              maxLines: 3,
+              maxLines: 4,
             ),
             const SizedBox(height: 48),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  Get.back();
-                  Get.snackbar(
-                    'Success',
-                    'Operations settings updated',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.green,
-                    colorText: Colors.white,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            Obx(
+              () => SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: controller.isUpdatingStore.value
+                      ? null
+                      : () {
+                          if (shippingController.text.trim().isEmpty ||
+                              return_policyController.text.trim().isEmpty) {
+                            Get.snackbar(
+                              'Error',
+                              'Please fill in all required fields',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.red.withValues(
+                                alpha: 0.1,
+                              ),
+                              colorText: Colors.red,
+                            );
+                            return;
+                          }
+                          controller
+                              .updateStoreInfo({
+                                'metadata': {
+                                  'shipping_rates': shippingController.text,
+                                  'return_policy': return_policyController.text,
+                                },
+                              })
+                              .then((_) {
+                                Get.back();
+                                Get.snackbar(
+                                  'Success',
+                                  'Store information updated successfully',
+                                  snackPosition: SnackPosition.BOTTOM,
+                                  backgroundColor: Colors.green.withOpacity(
+                                    0.1,
+                                  ),
+                                  colorText: Colors.green,
+                                );
+                              })
+                              .catchError((error) {
+                                Get.snackbar(
+                                  'Error',
+                                  'Failed to update store information: $error',
+                                  snackPosition: SnackPosition.BOTTOM,
+                                  backgroundColor: Colors.red.withOpacity(0.1),
+                                  colorText: Colors.red,
+                                );
+                              });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Save Settings',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+                  child: controller.isUpdatingStore.value
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Save Operations',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ),

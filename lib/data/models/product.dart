@@ -16,6 +16,8 @@ class ProductModel {
   final List<Map<String, dynamic>> reviews;
   final String? sku;
   final double? weight;
+  final String? material;
+  final Map<String, dynamic>? attributes; // NEW: Extra flexible attributes
   final String? status; // 'active', 'draft', 'archived'
   final String? currency; // NEW: Seller's local currency code
   final int? minQty; // NEW: Minimum order quantity at root level
@@ -113,6 +115,8 @@ class ProductModel {
     this.reviews = const [],
     this.sku,
     this.weight,
+    this.material,
+    this.attributes,
     this.status = 'active',
     this.currency,
     this.minQty,
@@ -142,7 +146,13 @@ class ProductModel {
       sellerId: json['seller_id']?.toString() ?? '', // UUID to String
       reviews: List<Map<String, dynamic>>.from(json['reviews'] ?? []),
       sku: json['sku'],
-      weight: (json['weight'] as num?)?.toDouble(),
+      weight:
+          (json['weight'] as num?)?.toDouble() ??
+          (json['attributes']?['weight'] as num?)?.toDouble(),
+      material: json['material'] ?? json['attributes']?['material'],
+      attributes: json['attributes'] != null
+          ? Map<String, dynamic>.from(json['attributes'])
+          : null,
       status: json['status'] ?? 'active',
       currency: json['currency'],
       minQty: json['min_qty'] ?? json['moq'],
@@ -170,11 +180,14 @@ class ProductModel {
   }
 
   Map<String, dynamic> toJson() {
+    final bool isNotYuan = currency != null && currency!.toUpperCase() != 'CNY';
+
     return {
       'id': id,
       'name': name,
       'description': description,
-      'price': price,
+      'price': isNotYuan ? CurrencyService.to.convertToYuan(price) : price,
+      'local_price': price, // Send local price as a backup/reference
       'original_price': originalPrice,
       'original_price_yuan': originalPriceYuan,
       'image_url': imageUrl,
@@ -185,13 +198,38 @@ class ProductModel {
       'seller_id': sellerId,
       'reviews': reviews,
       'sku': sku,
-      'weight': weight,
       'status': status,
       'currency': currency,
+      'min_qty': minQty,
+      // BACKEND INSTRUCTION: Fields like material, brand, or weight can be sent directly at the top level.
+      if (weight != null) 'weight': weight,
+      if (material != null) 'material': material,
+      ...?attributes,
       if (variants != null)
-        'variants': List<dynamic>.from(variants!.map((x) => x.toJson())),
+        'variants': List<dynamic>.from(
+          variants!.map((x) {
+            final vJson = x.toJson();
+            if (isNotYuan && x.price != null) {
+              vJson['price'] = CurrencyService.to.convertToYuan(x.price!);
+              vJson['local_price'] = x.price;
+            }
+            return vJson;
+          }),
+        ),
       if (moqTiers != null)
-        'moq_tiers': List<dynamic>.from(moqTiers!.map((x) => x.toJson())),
+        'moq_tiers': List<dynamic>.from(
+          moqTiers!.map((x) {
+            final tJson = x.toJson();
+            // BACKEND INSTRUCTION: price_per_unit should be sent in Yuan (CNY)
+            if (isNotYuan) {
+              tJson['price_per_unit'] = CurrencyService.to.convertToYuan(
+                x.pricePerUnit,
+              );
+              tJson['local_price'] = x.pricePerUnit;
+            }
+            return tJson;
+          }),
+        ),
       if (store != null) 'store': store!.toJson(),
       if (seller != null) 'seller': seller!.toJson(),
     };
@@ -201,7 +239,8 @@ class ProductModel {
 class MOQTier {
   final int minQty;
   final int? maxQty;
-  final double pricePerUnit; // Fallback
+  final double
+  pricePerUnit; // This should be treated as the price in the seller's currency
   final double? localPrice; // Real local price from backend
   final double? yuanPrice; // Real yuan price from backend
 
@@ -216,15 +255,18 @@ class MOQTier {
   factory MOQTier.fromJson(Map<String, dynamic> json) {
     // Safely extract the exact prices calculated/saved by the backend
     final localP = json['local_price'] ?? json['display_price'];
-    final yuanP = json['yuan_price'] ?? json['display_yuan'];
+    final yuanP =
+        json['yuan_price'] ?? json['display_yuan'] ?? json['price_per_unit'];
 
     return MOQTier(
       minQty: json['min_qty'] ?? 1,
       maxQty: json['max_qty'],
+      // If we have a local price from backend, use it as the primary unit price for the seller UI
       pricePerUnit:
-          (json['price_per_unit'] as num?)?.toDouble() ??
-          (yuanP as num?)?.toDouble() ??
-          0.0,
+          (localP as num?)?.toDouble() ??
+          CurrencyService.to.convertFromYuan(
+            (yuanP as num?)?.toDouble() ?? 0.0,
+          ),
       localPrice: (localP as num?)?.toDouble(),
       yuanPrice: (yuanP as num?)?.toDouble(),
     );
@@ -242,24 +284,85 @@ class MOQTier {
 }
 
 class ProductVariant {
-  final String type; // e.g. 'Color', 'Size'
+  final String type; // 'Color', 'Size', 'Weight', 'Material', 'Other'
   final String value;
-  final double? price;
+  final double?
+  price; // This should be treated as the price in the seller's currency
   final int? stock;
+  final String? imageUrl; // Main variant image (Legacy support)
+  final List<String> galleryUrls; // New: Supports multiple images per variant
+  final String? weight;
+  final String? material;
+  final String? description; // New: Variant description
+  final bool isActive;
+  final Map<String, String>?
+  attributes; // NEW: Supports nested variants (e.g. Color: Red, Size: XL)
 
   ProductVariant({
     required this.type,
     required this.value,
     this.price,
     this.stock,
+    this.imageUrl,
+    this.galleryUrls = const [],
+    this.weight,
+    this.material,
+    this.description,
+    this.isActive = true,
+    this.attributes,
   });
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
+    // If backend returns a flat structure (e.g. {"color": "Red", "size": "XL", "stock": 10})
+    // and missing "type" / "value", we try to extract them.
+    String extractedType = json['type'] ?? 'Other';
+    String extractedValue = json['value'] ?? '';
+
+    // If still empty, use the first key that isn't a reserved field as type/value
+    if (extractedValue.isEmpty) {
+      final reservedKeys = [
+        'price',
+        'local_price',
+        'stock',
+        'image_url',
+        'gallery_urls',
+        'weight',
+        'material',
+        'description',
+        'is_active',
+        'attributes',
+      ];
+      final attrKeys = json.keys
+          .where((k) => !reservedKeys.contains(k))
+          .toList();
+      if (attrKeys.isNotEmpty) {
+        extractedType = attrKeys.first;
+        extractedValue = json[extractedType].toString();
+      }
+    }
+
+    final localP = json['local_price'] ?? json['display_price'];
+    final yuanP = json['price'] ?? json['display_yuan'];
+
     return ProductVariant(
-      type: json['type'],
-      value: json['value'],
-      price: (json['price'] as num?)?.toDouble(),
+      type: extractedType,
+      value: extractedValue,
+      // If we have a local price from backend, use it. Otherwise convert the yuan price.
+      price:
+          (localP as num?)?.toDouble() ??
+          (yuanP != null
+              ? CurrencyService.to.convertFromYuan((yuanP as num).toDouble())
+              : null),
       stock: json['stock'],
+      imageUrl: json['image_url'],
+      galleryUrls: List<String>.from(json['gallery_urls'] ?? []),
+      weight: json['weight'] ?? json['attributes']?['weight'],
+      material: json['material'] ?? json['attributes']?['material'],
+      description: json['description'],
+      isActive: json['is_active'] ?? true,
+      attributes: json['attributes'] != null
+          ? Map<String, String>.from(json['attributes'])
+          : null,
     );
   }
 
@@ -267,8 +370,19 @@ class ProductVariant {
     return {
       'type': type,
       'value': value,
+      // Include the type/value as a direct key as well for backend flexibility
+      if (type.toLowerCase() != 'other' && value.isNotEmpty)
+        type.toLowerCase(): value,
       if (price != null) 'price': price,
       if (stock != null) 'stock': stock,
+      if (imageUrl != null) 'image_url': imageUrl,
+      'gallery_urls': galleryUrls,
+      if (description != null) 'description': description,
+      'is_active': isActive,
+      // BACKEND INSTRUCTION: Send nested attributes at top level for JSON storage
+      if (weight != null) 'weight': weight,
+      if (material != null) 'material': material,
+      ...?attributes,
     };
   }
 }
@@ -276,14 +390,23 @@ class ProductVariant {
 class StoreInfo {
   final String name;
   final String? logoUrl;
+  final Map<String, dynamic>? metadata;
 
-  StoreInfo({required this.name, this.logoUrl});
+  StoreInfo({required this.name, this.logoUrl, this.metadata});
 
   factory StoreInfo.fromJson(Map<String, dynamic> json) {
-    return StoreInfo(name: json['name'] ?? '', logoUrl: json['logo_url']);
+    return StoreInfo(
+      name: json['name'] ?? '',
+      logoUrl: json['logo_url'],
+      metadata: json['metadata'],
+    );
   }
 
-  Map<String, dynamic> toJson() => {'name': name, 'logo_url': logoUrl};
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'logo_url': logoUrl,
+    'metadata': metadata,
+  };
 }
 
 class SellerInfo {

@@ -252,7 +252,7 @@ class SellerDashboard extends GetView<SellerController> {
 
     switch (controller.currentTabIndex.value) {
       case 1:
-        title = 'Store Name'; // Placeholder Store Name
+        title = controller.storeName;
         break;
       case 2:
         title = 'Orders';
@@ -262,6 +262,9 @@ class SellerDashboard extends GetView<SellerController> {
         break;
       case 4:
         title = 'Menu';
+        break;
+      case 5:
+        title = 'Profile';
         break;
       case 6:
         title = 'Settings';
@@ -294,19 +297,41 @@ class SellerDashboard extends GetView<SellerController> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    image: const DecorationImage(
-                      image: NetworkImage(
-                        'https://images.unsplash.com/photo-1560179707-f14e90ef3623?q=80&w=100',
-                      ), // Company placeholder
-                      fit: BoxFit.cover,
-                    ),
                   ),
+                  child: Obx(() {
+                    final logoUrl = controller.store.value?.logoUrl;
+                    if (logoUrl != null && logoUrl.isNotEmpty) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: logoUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const Icon(
+                            Icons.store,
+                            size: 20,
+                            color: Colors.black26,
+                          ),
+                          errorWidget: (context, url, error) => const Icon(
+                            Icons.store,
+                            size: 20,
+                            color: Colors.black26,
+                          ),
+                        ),
+                      );
+                    } else {
+                      return const Icon(
+                        Icons.store,
+                        size: 20,
+                        color: Colors.black26,
+                      );
+                    }
+                  }),
                 ),
               if (controller.currentTabIndex.value == 1)
                 const SizedBox(width: 12),
               Text(
                 title,
-                style: AppTypography.h2.copyWith(
+                style: AppTypography.h3.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
@@ -339,13 +364,12 @@ class SellerDashboard extends GetView<SellerController> {
   }
 
   Widget _buildHomeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Metrics Summary Grid
-          GridView.count(
+    return Column(
+      children: [
+        // Metrics Summary Grid (Fixed at top)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
@@ -354,122 +378,167 @@ class SellerDashboard extends GetView<SellerController> {
             childAspectRatio: 1.25, // Improved from 1.5 to prevent overflow
             children: [
               Obx(() {
-                // Ensure GetX tracks location changes
-                final _ = CurrencyService.to.currentLocation.value;
-                const double salesYuan = 62.25; // Example Yuan for 12,450 Naira
+                final salesYuan = controller.stats.value?.totalSales ?? 0.0;
                 final localSales = CurrencyService.to.convertFromYuan(
                   salesYuan,
                 );
 
                 return _buildMetricCard(
                   'Total Sales',
-                  '¥${salesYuan.toStringAsFixed(0)} ≈ ${CurrencyService.to.localCurrencySymbol}${localSales.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
+                  '${CurrencyService.to.localCurrencySymbol}${localSales.toStringAsFixed(0).replaceAllMapped(RegExp(r"(\d{1,3})(?=(\d{3})+(?!\d))"), (Match m) => "${m[1]},")}',
                   Icons.payments_outlined,
                   AppColors.primary,
                 );
               }),
-              _buildMetricCard(
-                'Total Orders',
-                '156',
-                Icons.shopping_bag_outlined,
-                Colors.orange,
+              Obx(
+                () => _buildMetricCard(
+                  'Total Orders',
+                  '${controller.stats.value?.totalOrders ?? 0}',
+                  Icons.shopping_bag_outlined,
+                  Colors.orange,
+                ),
               ),
-              _buildMetricCard(
-                'Total Products',
-                '42',
-                Icons.inventory_2_outlined,
-                Colors.green,
-              ),
-              _buildMetricCard(
-                'Total Customers',
-                '1,204',
-                Icons.people_outline,
-                Colors.deepPurple,
+              Obx(() {
+                final statsProducts =
+                    controller.stats.value?.totalProducts ?? 0;
+                final localProducts = controller.myProducts.length;
+                // Use stats if non-zero, otherwise fallback to locally loaded products count
+                final displayCount = statsProducts > 0
+                    ? statsProducts
+                    : localProducts;
+
+                return _buildMetricCard(
+                  'Total Products',
+                  '$displayCount',
+                  Icons.inventory_2_outlined,
+                  Colors.green,
+                );
+              }),
+              Obx(
+                () => _buildMetricCard(
+                  'Total Customers',
+                  '${controller.stats.value?.totalCustomers ?? 0}',
+                  Icons.people_outline,
+                  Colors.deepPurple,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+        ),
 
-          // Quick Actions
-          Text(
-            'Quick Actions',
-            style: AppTypography.bodyLarge.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildQuickAction(
-                  'Add Product',
-                  Icons.add_circle_outline,
-                  () => Get.toNamed(Routes.addProduct),
-                ),
-                _buildQuickAction(
-                  'View Orders',
-                  Icons.list_alt_outlined,
-                  () => controller.changeTab(2),
-                ),
-                _buildQuickAction(
-                  'Bulk Import',
-                  Icons.cloud_download_outlined,
-                  () => Get.snackbar(
-                    'Coming Soon',
-                    'The Bulk Import feature is currently under development.',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.black,
-                    colorText: Colors.white,
-                  ),
-                ),
-                _buildQuickAction('Marketing', Icons.campaign_outlined, () {}),
-                _buildQuickAction('Store Setup', Icons.store_outlined, () {}),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Recent Activities
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Activities',
-                style: AppTypography.bodyLarge.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(onPressed: () {}, child: const Text('View All')),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade100),
-            ),
+        // Scrollable Area (Quick Actions and Recent Activities)
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.history, size: 48, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
+                // Quick Actions
                 Text(
-                  'No recent activities yet',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
+                  'Quick Actions',
+                  style: AppTypography.bodyLarge.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildQuickAction(
+                        'Add Product',
+                        Icons.add_circle_outline,
+                        () => Get.toNamed(Routes.addProduct),
+                      ),
+                      _buildQuickAction(
+                        'View Orders',
+                        Icons.list_alt_outlined,
+                        () => controller.changeTab(2),
+                      ),
+                      _buildQuickAction(
+                        'Products',
+                        Icons.inventory_2_outlined,
+                        () => controller.changeTab(3),
+                      ),
+                      _buildQuickAction(
+                        'Payment',
+                        Icons.payments_outlined,
+                        () => Get.toNamed(Routes.sellerPayouts),
+                      ),
+                      _buildQuickAction(
+                        'Store Setup',
+                        Icons.store_outlined,
+                        () => Get.toNamed(Routes.sellerStoreSetup),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Recent Activities
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Recent Activities',
+                      style: AppTypography.bodyLarge.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextButton(onPressed: () {}, child: const Text('View All')),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Obx(() {
+                  final activities =
+                      controller.stats.value?.recentActivities ?? [];
+                  if (activities.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade100),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.history,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No recent activities yet',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return Column(
+                    children: activities.map((activity) {
+                      return ListTile(
+                        leading: const CircleAvatar(
+                          child: Icon(Icons.notifications),
+                        ),
+                        title: Text(activity['title'] ?? ''),
+                        subtitle: Text(activity['description'] ?? ''),
+                        trailing: Text(activity['time'] ?? ''),
+                      );
+                    }).toList(),
+                  );
+                }),
               ],
             ),
           ),
-          const SizedBox(height: 100), // Space for nav
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -609,7 +678,7 @@ class SellerDashboard extends GetView<SellerController> {
     return Column(
       children: [
         _buildFilterBar('Filter orders'),
-        _buildStatusChips(['All', 'Unpaid', 'Open', 'Archived']),
+        _buildStatusChips(['Pending', 'Processing', 'Shipped', 'Delivered']),
         Expanded(
           child: Obx(() {
             if (controller.orders.isEmpty) {
@@ -807,10 +876,6 @@ class SellerDashboard extends GetView<SellerController> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          _iconButton(Icons.swap_vert),
-          const SizedBox(width: 8),
-          _iconButton(Icons.tune),
         ],
       ),
     );
@@ -997,6 +1062,8 @@ class SellerDashboard extends GetView<SellerController> {
         return Colors.blue;
       case 'shipped':
         return Colors.green;
+      case 'delivered':
+        return Colors.teal;
       default:
         return Colors.grey;
     }
@@ -1294,7 +1361,6 @@ class SellerDashboard extends GetView<SellerController> {
                       'All orders',
                       onTap: () => controller.changeTab(2),
                     ),
-                    _subMenu('Drafts'),
                   ],
                 ),
               ),

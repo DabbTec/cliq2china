@@ -14,12 +14,19 @@ class ApiEndpoints {
   static const String signup = 'auth/signup/';
   static const String profile = 'auth/profile/';
   static const String tokenRefresh = 'auth/token/refresh/';
+  static const String changePassword = 'auth/change-password/';
+  static const String forgotPassword = 'auth/forgot-password/';
+  static const String resetPassword = 'auth/reset-password/';
 
   // Products
   static const String products = 'products/';
   static const String bulkDeleteProducts = 'products/bulk-delete/';
   static const String categories = 'categories/';
   static const String stores = 'stores/';
+  static const String storeVerifications = 'stores/verifications/';
+
+  // Orders
+  static const String orderStats = 'orders/stats/';
 
   // Cart & Shipping
   static const String cart = 'cart/';
@@ -27,7 +34,11 @@ class ApiEndpoints {
 
   // Wallet & Referrals
   static const String wallet = 'wallet/';
+  static const String payouts = 'wallet/payouts/';
   static const String referrals = 'referrals/';
+
+  // Promotions
+  static const String promotions = 'promotions/';
 
   // Utilities
   static const String uploadImage = 'upload-image/';

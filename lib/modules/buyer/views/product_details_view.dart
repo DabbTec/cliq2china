@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -26,12 +28,22 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
   final RxBool _showSearchBar = false.obs;
   final Rx<ProductModel?> _detailedProduct = Rx<ProductModel?>(null);
   final RxBool _isLoading = true.obs;
+  final RxBool _isPreview = false.obs;
   final ProductRepository _productRepository = ProductRepository();
 
   // REPLACE _currentPrice with these two strict trackers
   final RxDouble _currentYuanPrice = 0.0.obs;
   final RxDouble _currentLocalPrice = 0.0.obs;
   final RxInt _selectedQty = 1.obs;
+  final RxMap<String, String> _selectedVariants = <String, String>{}.obs;
+
+  // Gallery-specific states
+  final RxList<String> _activeGallery = <String>[].obs;
+  final Rx<ProductVariant?> _selectedVariantForGallery = Rx<ProductVariant?>(
+    null,
+  );
+  final RxList<String> _initialGallery = <String>[].obs;
+  final RxBool _isShowingInitial = true.obs;
 
   String _formatPrice(double value) {
     final absValue = value.abs();
@@ -57,6 +69,16 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     if (args != null && args['product'] != null) {
       final ProductModel initialProduct = args['product'] as ProductModel;
       _detailedProduct.value = initialProduct;
+      _isPreview.value = args['isPreview'] ?? false;
+
+      // Initialize galleries
+      _initialGallery.assignAll([
+        initialProduct.imageUrl,
+        ...initialProduct.galleryUrls.where(
+          (url) => url != initialProduct.imageUrl,
+        ),
+      ]);
+      _activeGallery.assignAll(_initialGallery);
 
       // Set initial MOQ based on the lowest MOQ tier, not the raw base price.
       int initialMOQ = 1;
@@ -81,7 +103,11 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     });
 
     // 3. Fetch full details in background
-    _fetchProductDetails();
+    if (!_isPreview.value) {
+      _fetchProductDetails();
+    } else {
+      _isLoading.value = false;
+    }
   }
 
   Future<void> _fetchProductDetails() async {
@@ -92,6 +118,20 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
           product.id,
         );
         _detailedProduct.value = fullProduct;
+
+        // Update initial gallery with full details
+        _initialGallery.assignAll([
+          fullProduct.imageUrl,
+          ...fullProduct.galleryUrls.where(
+            (url) => url != fullProduct.imageUrl,
+          ),
+        ]);
+
+        // Only switch active gallery if we're not currently looking at a variant gallery
+        if (_selectedVariantForGallery.value == null) {
+          _activeGallery.assignAll(_initialGallery);
+        }
+
         _updatePrice();
       } catch (e) {
         debugPrint('Error fetching product details: $e');
@@ -188,12 +228,6 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
 
       final controller = Get.find<BuyerController>();
 
-      // Filter gallery to avoid duplicating the main image
-      final displayGallery = [
-        product.imageUrl,
-        ...product.galleryUrls.where((url) => url != product.imageUrl),
-      ];
-
       return Scaffold(
         backgroundColor: const Color(0xFFF8F8F8),
         body: Stack(
@@ -211,52 +245,76 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
                       children: [
-                        PageView.builder(
-                          controller: _pageController,
-                          onPageChanged: (index) =>
-                              _currentImageIndex.value = index,
-                          itemCount: displayGallery.length,
-                          itemBuilder: (context, index) {
-                            final imgUrl = displayGallery[index];
-                            return CachedNetworkImage(
-                              imageUrl: imgUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[100],
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
+                        Obx(
+                          () => PageView.builder(
+                            controller: _pageController,
+                            onPageChanged: (index) {
+                              _currentImageIndex.value = index;
+                            },
+                            itemCount: _activeGallery.length,
+                            itemBuilder: (context, index) {
+                              final imgUrl = _activeGallery[index];
+                              if (_isPreview.value &&
+                                  !imgUrl.startsWith('http')) {
+                                return Image.file(
+                                  File(imgUrl),
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                );
+                              }
+                              return CachedNetworkImage(
+                                imageUrl: imgUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[100],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
                                 ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.broken_image, size: 50),
-                              ),
-                            );
-                          },
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(
+                                    Icons.broken_image,
+                                    size: 50,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                        // Image Indicator (e.g., 1/3)
+                        // Image Indicator (just the counter)
                         Positioned(
                           bottom: 20.h,
-                          right: 20.w,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 10.w,
-                              vertical: 4.h,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(15.r),
-                            ),
-                            child: Text(
-                              '${_currentImageIndex.value + 1}/${displayGallery.length}',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
+                          left: 0,
+                          right: 0,
+                          child: Obx(() {
+                            if (_activeGallery.isEmpty)
+                              return const SizedBox.shrink();
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 10.w,
+                                    vertical: 4.h,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(15.r),
+                                  ),
+                                  child: Text(
+                                    '${_currentImageIndex.value + 1}/${_activeGallery.length}',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12.sp,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
                         ),
                       ],
                     ),
@@ -300,7 +358,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   ),
                   actions: [
                     Obx(
-                      () => !_showSearchBar.value
+                      () => !_showSearchBar.value && !_isPreview.value
                           ? Row(
                               children: [
                                 IconButton(
@@ -331,97 +389,300 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                             )
                           : const SizedBox.shrink(),
                     ),
-                    Stack(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.shopping_cart_outlined,
-                            color: Colors.black,
-                            size: 22.sp,
-                          ),
-                          onPressed: () => Get.toNamed(
-                            Routes.buyerDashboard,
-                            arguments: {'index': 4},
-                          ),
-                        ),
-                        if (controller.cartItems.isNotEmpty)
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: BoxConstraints(
-                                minWidth: 14.w,
-                                minHeight: 14.w,
-                              ),
-                              child: Text(
-                                '${controller.cartItems.length}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                    if (!_isPreview.value)
+                      Stack(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.shopping_cart_outlined,
+                              color: Colors.black,
+                              size: 22.sp,
+                            ),
+                            onPressed: () => Get.toNamed(
+                              Routes.buyerDashboard,
+                              arguments: {'index': 4},
                             ),
                           ),
-                      ],
-                    ),
+                          if (controller.cartItems.isNotEmpty)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                constraints: BoxConstraints(
+                                  minWidth: 14.w,
+                                  minHeight: 14.w,
+                                ),
+                                child: Text(
+                                  '${controller.cartItems.length}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8.sp,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     SizedBox(width: 8.w),
                   ],
                 ),
 
                 // 1.1 Gallery Thumbnails
-                if (displayGallery.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      height: 80.h,
-                      color: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 10.h),
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: EdgeInsets.symmetric(horizontal: 20.w),
-                        itemCount: displayGallery.length,
-                        itemBuilder: (context, index) {
-                          final imgUrl = displayGallery[index];
-                          return Obx(() {
-                            final isSelected =
-                                _currentImageIndex.value == index;
-                            return GestureDetector(
-                              onTap: () {
-                                _pageController.animateToPage(
-                                  index,
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                );
-                              },
-                              child: Container(
-                                width: 60.h,
-                                margin: EdgeInsets.only(right: 12.w),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8.r),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : Colors.grey[200]!,
-                                    width: 2,
-                                  ),
-                                  image: DecorationImage(
-                                    image: CachedNetworkImageProvider(imgUrl),
-                                    fit: BoxFit.cover,
-                                  ),
+                SliverToBoxAdapter(
+                  child: Container(
+                    height: 100.h,
+                    color: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10.h),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(horizontal: 20.w),
+                      children: [
+                        // 1. "Initial" Gallery Thumbnail (Main product image)
+                        Obx(() {
+                          final isSelected =
+                              _selectedVariantForGallery.value == null;
+                          return GestureDetector(
+                            onTap: () {
+                              _selectedVariantForGallery.value = null;
+                              _isShowingInitial.value = true;
+                              _activeGallery.assignAll(_initialGallery);
+                              _pageController.jumpToPage(0);
+                            },
+                            child: Container(
+                              width: 70.h,
+                              margin: EdgeInsets.only(right: 12.w),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8.r),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : Colors.grey[200]!,
+                                  width: 2,
                                 ),
                               ),
-                            );
-                          });
-                        },
-                      ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6.r),
+                                child: CachedNetworkImage(
+                                  imageUrl: _initialGallery.isNotEmpty
+                                      ? _initialGallery[0]
+                                      : '',
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+
+                        // 2. Variant Gallery Thumbnails (One per variant)
+                        if (product.variants != null)
+                          ...product.variants!.map((variant) {
+                            return Obx(() {
+                              final isSelected =
+                                  _selectedVariantForGallery.value == variant;
+                              final String thumbUrl =
+                                  (variant.imageUrl != null &&
+                                      variant.imageUrl!.isNotEmpty)
+                                  ? variant.imageUrl!
+                                  : (variant.galleryUrls.isNotEmpty
+                                        ? variant.galleryUrls[0]
+                                        : (product.imageUrl));
+
+                              return GestureDetector(
+                                onTap: () {
+                                  _selectedVariantForGallery.value = variant;
+                                  _selectedVariants[variant.type] =
+                                      variant.value;
+
+                                  // Switch to variant gallery
+                                  final List<String> variantGallery = [];
+                                  if (variant.imageUrl != null &&
+                                      variant.imageUrl!.isNotEmpty) {
+                                    variantGallery.add(variant.imageUrl!);
+                                  }
+                                  variantGallery.addAll(
+                                    variant.galleryUrls.where(
+                                      (url) => !variantGallery.contains(url),
+                                    ),
+                                  );
+
+                                  if (variantGallery.isNotEmpty) {
+                                    _activeGallery.assignAll(variantGallery);
+                                    _isShowingInitial.value = false;
+                                    _pageController.jumpToPage(0);
+                                  } else {
+                                    // If no variant images, show initial gallery but highlight this variant
+                                    _activeGallery.assignAll(_initialGallery);
+                                    _isShowingInitial.value = true;
+                                  }
+                                },
+                                child: Container(
+                                  width: 70.h,
+                                  margin: EdgeInsets.only(right: 12.w),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8.r),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : Colors.grey[200]!,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                          6.r,
+                                        ),
+                                        child: CachedNetworkImage(
+                                          imageUrl: thumbUrl,
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                        ),
+                                      ),
+                                      // Variant value overlay text
+                                      Positioned(
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 2.h,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                            borderRadius: BorderRadius.vertical(
+                                              bottom: Radius.circular(6.r),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            variant.attributes != null &&
+                                                    variant
+                                                        .attributes!
+                                                        .isNotEmpty
+                                                ? '${variant.value}, ${variant.attributes!.values.first}'
+                                                : variant.value,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9.sp,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            });
+                          }),
+                      ],
                     ),
                   ),
+                ),
+
+                // 1.2 Selected Variant Info (shown under gallery)
+                SliverToBoxAdapter(
+                  child: Obx(() {
+                    final variant = _selectedVariantForGallery.value;
+                    if (variant == null) return const SizedBox.shrink();
+
+                    return Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 20.w,
+                        vertical: 12.h,
+                      ),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    '${variant.type}: ',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    variant.value,
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              // Display nested attributes if they exist
+                              if (variant.attributes != null &&
+                                  variant.attributes!.isNotEmpty)
+                                ...variant.attributes!.entries.map((attr) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(top: 4.h),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          '${attr.key}: ',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14.sp,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          attr.value,
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                            ],
+                          ),
+                          if (variant.description != null &&
+                              variant.description!.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.only(top: 4.h),
+                              child: Text(
+                                variant.description!,
+                                style: TextStyle(
+                                  color: Colors.grey[800],
+                                  fontSize: 13.sp,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          const Divider(),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
 
                 // 2. Product Info Section
                 SliverToBoxAdapter(
@@ -452,7 +713,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                                   ),
                                 ),
                               Obx(() {
-                                // Access observables to ensure GetX tracks this widget
+                                // 1. Main Price Display (Both Yuan & Local)
                                 // Trigger update on location change
                                 CurrencyService.to.currentLocation.value;
 
@@ -597,14 +858,16 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                           icon: Icons.local_shipping_outlined,
                           title: 'Shipping',
                           subtitle:
+                              product.store?.metadata?['shipping_rates'] ??
                               'Free shipping to Nigeria via Cliq2China Standard',
                           onTap: () {},
                         ),
                         const Divider(height: 1, indent: 60),
                         _buildClickableRow(
-                          icon: Icons.verified_user_outlined,
-                          title: 'Service',
+                          icon: Icons.assignment_return_outlined,
+                          title: 'Return Policy',
                           subtitle:
+                              product.store?.metadata?['return_policy'] ??
                               '75-day Buyer Protection · Money back guarantee',
                           onTap: () {},
                         ),
@@ -756,167 +1019,173 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                 ),
 
                 // 6. Buyer Reviews
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Buyer Reviews (${product.reviews.where((r) => r['comment'] != null && r['comment'].toString().trim().isNotEmpty).length})',
-                              style: AppTypography.h3,
-                            ),
-                            if (product.reviews.any(
-                              (r) =>
-                                  r['comment'] != null &&
-                                  r['comment'].toString().trim().isNotEmpty,
-                            ))
-                              TextButton(
-                                onPressed: () {},
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Buyer Reviews (${product.reviews.where((r) => r['comment'] != null && r['comment'].toString().trim().isNotEmpty).length})',
+                                style: AppTypography.h3,
+                              ),
+                              if (product.reviews.any(
+                                (r) =>
+                                    r['comment'] != null &&
+                                    r['comment'].toString().trim().isNotEmpty,
+                              ))
+                                TextButton(
+                                  onPressed: () {},
+                                  child: Text(
+                                    'View All',
+                                    style: TextStyle(
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (product.reviews.isEmpty ||
+                              !product.reviews.any(
+                                (r) =>
+                                    r['comment'] != null &&
+                                    r['comment'].toString().trim().isNotEmpty,
+                              ))
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20.h),
+                              child: Center(
                                 child: Text(
-                                  'View All',
+                                  'No reviews with comments yet.',
                                   style: TextStyle(
-                                    color: Colors.blue[700],
-                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                    fontSize: 14.sp,
+                                    fontStyle: FontStyle.italic,
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                        if (product.reviews.isEmpty ||
-                            !product.reviews.any(
-                              (r) =>
-                                  r['comment'] != null &&
-                                  r['comment'].toString().trim().isNotEmpty,
-                            ))
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20.h),
-                            child: Center(
-                              child: Text(
-                                'No reviews with comments yet.',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14.sp,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
+                            )
+                          else
+                            Column(
+                              children: product.reviews
+                                  .where(
+                                    (r) =>
+                                        r['comment'] != null &&
+                                        r['comment']
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty,
+                                  )
+                                  .take(3)
+                                  .map((r) => _buildReviewItem(r))
+                                  .toList(),
                             ),
-                          )
-                        else
-                          Column(
-                            children: product.reviews
-                                .where(
-                                  (r) =>
-                                      r['comment'] != null &&
-                                      r['comment'].toString().trim().isNotEmpty,
-                                )
-                                .take(3)
-                                .map((r) => _buildReviewItem(r))
-                                .toList(),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 // 7. Similar Products
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Similar Products', style: AppTypography.h3),
-                        SizedBox(height: 16.h),
-                        SizedBox(
-                          height: 240.h,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: controller.products.length,
-                            itemBuilder: (context, index) {
-                              final p = controller.products[index];
-                              return Container(
-                                width: 160.w,
-                                margin: EdgeInsets.only(right: 15.w),
-                                child: ProductCard(
-                                  title: p.name,
-                                  price: p.price,
-                                  originalPriceYuan: p.originalPriceYuan,
-                                  moqTiers: p.moqTiers,
-                                  displayPrice: p.displayPrice,
-                                  displayYuan: p.displayYuan,
-                                  displaySymbol: p.displaySymbol,
-                                  imageUrl: p.imageUrl,
-                                  rating: p.rating,
-                                  stock: p.stock,
-                                  onTap: () => Get.toNamed(
-                                    Routes.productDetails,
-                                    arguments: {'product': p},
-                                    preventDuplicates: false,
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Similar Products', style: AppTypography.h3),
+                          SizedBox(height: 16.h),
+                          SizedBox(
+                            height: 240.h,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: controller.products.length,
+                              itemBuilder: (context, index) {
+                                final p = controller.products[index];
+                                return Container(
+                                  width: 160.w,
+                                  margin: EdgeInsets.only(right: 15.w),
+                                  child: ProductCard(
+                                    title: p.name,
+                                    price: p.price,
+                                    originalPriceYuan: p.originalPriceYuan,
+                                    moqTiers: p.moqTiers,
+                                    displayPrice: p.displayPrice,
+                                    displayYuan: p.displayYuan,
+                                    displaySymbol: p.displaySymbol,
+                                    imageUrl: p.imageUrl,
+                                    rating: p.rating,
+                                    stock: p.stock,
+                                    onTap: () => Get.toNamed(
+                                      Routes.productDetails,
+                                      arguments: {'product': p},
+                                      preventDuplicates: false,
+                                    ),
+                                    onAddToCart: () => controller.addToCart(p),
                                   ),
-                                  onAddToCart: () => controller.addToCart(p),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 // 8. Most Viewed Products
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.only(top: 10.h),
-                    padding: EdgeInsets.all(20.w),
-                    color: Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Most Viewed Products', style: AppTypography.h3),
-                        SizedBox(height: 16.h),
-                        SizedBox(
-                          height: 240.h,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: controller.products.reversed.length,
-                            itemBuilder: (context, index) {
-                              final p = controller.products.reversed
-                                  .toList()[index];
-                              return Container(
-                                width: 160.w,
-                                margin: EdgeInsets.only(right: 15.w),
-                                child: ProductCard(
-                                  title: p.name,
-                                  price: p.price,
-                                  originalPriceYuan: p.originalPriceYuan,
-                                  moqTiers: p.moqTiers,
-                                  imageUrl: p.imageUrl,
-                                  rating: p.rating,
-                                  stock: p.stock,
-                                  onTap: () => Get.toNamed(
-                                    Routes.productDetails,
-                                    arguments: {'product': p},
-                                    preventDuplicates: false,
+                if (!_isPreview.value)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.only(top: 10.h),
+                      padding: EdgeInsets.all(20.w),
+                      color: Colors.white,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Most Viewed Products', style: AppTypography.h3),
+                          SizedBox(height: 16.h),
+                          SizedBox(
+                            height: 240.h,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: controller.products.reversed.length,
+                              itemBuilder: (context, index) {
+                                final p = controller.products.reversed
+                                    .toList()[index];
+                                return Container(
+                                  width: 160.w,
+                                  margin: EdgeInsets.only(right: 15.w),
+                                  child: ProductCard(
+                                    title: p.name,
+                                    price: p.price,
+                                    originalPriceYuan: p.originalPriceYuan,
+                                    moqTiers: p.moqTiers,
+                                    imageUrl: p.imageUrl,
+                                    rating: p.rating,
+                                    stock: p.stock,
+                                    onTap: () => Get.toNamed(
+                                      Routes.productDetails,
+                                      arguments: {'product': p},
+                                      preventDuplicates: false,
+                                    ),
+                                    onAddToCart: () => controller.addToCart(p),
                                   ),
-                                  onAddToCart: () => controller.addToCart(p),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 SliverToBoxAdapter(child: SizedBox(height: 100.h)),
               ],
@@ -940,110 +1209,121 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                   ],
                 ),
                 child: SafeArea(
-                  child: Row(
-                    children: [
-                      _buildBottomIconButton(Icons.chat_bubble_outline, 'Chat'),
-                      SizedBox(width: 20.w),
-                      GestureDetector(
-                        onTap: () => Get.toNamed(
-                          Routes.store,
-                          arguments: {
-                            'sellerId': product.sellerId,
-                            'sellerName':
-                                product.store?.name ??
-                                product.seller?.businessName ??
-                                'Unnamed Store',
-                          },
-                        ),
-                        child: _buildBottomIconButton(
-                          Icons.store_outlined,
-                          'Store',
-                        ),
-                      ),
-                      SizedBox(width: 20.w),
-                      Expanded(
-                        child: Row(
+                  child: _isPreview.value
+                      ? PrimaryButton(
+                          text: 'Back to Edit Product',
+                          onPressed: () => Get.back(),
+                          color: Colors.black,
+                          textColor: Colors.white,
+                        )
+                      : Row(
                           children: [
+                            _buildBottomIconButton(
+                              Icons.chat_bubble_outline,
+                              'Chat',
+                              onTap: null,
+                            ),
+                            SizedBox(width: 20.w),
+                            GestureDetector(
+                              onTap: () => Get.toNamed(
+                                Routes.store,
+                                arguments: {
+                                  'sellerId': product.sellerId,
+                                  'sellerName':
+                                      product.store?.name ??
+                                      product.seller?.businessName ??
+                                      'Unnamed Store',
+                                },
+                              ),
+                              child: _buildBottomIconButton(
+                                Icons.store_outlined,
+                                'Store',
+                              ),
+                            ),
+                            SizedBox(width: 20.w),
                             Expanded(
-                              child: GestureDetector(
-                                onTap: product.stock <= 0
-                                    ? null
-                                    : () {
-                                        _showQtyPicker(product);
-                                      },
-                                child: Container(
-                                  height: 48.h,
-                                  decoration: BoxDecoration(
-                                    color: product.stock <= 0
-                                        ? Colors.grey[200]
-                                        : const Color(0xFFFFF1F1),
-                                    borderRadius: BorderRadius.horizontal(
-                                      left: Radius.circular(24.r),
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Obx(
-                                    () => Text(
-                                      product.stock <= 0
-                                          ? 'Out of Stock'
-                                          : 'Qty: ${_selectedQty.value}',
-                                      style: TextStyle(
-                                        color: product.stock <= 0
-                                            ? Colors.grey
-                                            : Colors.red[400],
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14.sp,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: product.stock <= 0
+                                          ? null
+                                          : () {
+                                              _showQtyPicker(product);
+                                            },
+                                      child: Container(
+                                        height: 48.h,
+                                        decoration: BoxDecoration(
+                                          color: product.stock <= 0
+                                              ? Colors.grey[200]
+                                              : const Color(0xFFFFF1F1),
+                                          borderRadius: BorderRadius.horizontal(
+                                            left: Radius.circular(24.r),
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Obx(
+                                          () => Text(
+                                            product.stock <= 0
+                                                ? 'Out of Stock'
+                                                : 'Qty: ${_selectedQty.value}',
+                                            style: TextStyle(
+                                              color: product.stock <= 0
+                                                  ? Colors.grey
+                                                  : Colors.red[400],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14.sp,
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: GestureDetector(
-                                onTap: product.stock <= 0
-                                    ? null
-                                    : () {
-                                        // Always update/add to cart with the selected quantity
-                                        controller.addToCart(
-                                          product,
-                                          quantity: _selectedQty.value,
-                                        );
-                                        Get.toNamed(
-                                          Routes.buyerDashboard,
-                                          arguments: {'index': 4},
-                                        );
-                                      },
-                                child: Container(
-                                  height: 48.h,
-                                  decoration: BoxDecoration(
-                                    color: product.stock <= 0
-                                        ? Colors.grey[400]
-                                        : Colors.blue[700],
-                                    borderRadius: BorderRadius.horizontal(
-                                      right: Radius.circular(24.r),
+                                  Expanded(
+                                    flex: 1,
+                                    child: GestureDetector(
+                                      onTap: product.stock <= 0
+                                          ? null
+                                          : () {
+                                              // Always update/add to cart with the selected quantity
+                                              controller.addToCart(
+                                                product,
+                                                quantity: _selectedQty.value,
+                                              );
+                                              Get.toNamed(
+                                                Routes.buyerDashboard,
+                                                arguments: {'index': 4},
+                                              );
+                                            },
+                                      child: Container(
+                                        height: 48.h,
+                                        decoration: BoxDecoration(
+                                          color: product.stock <= 0
+                                              ? Colors.grey[400]
+                                              : Colors.blue[700],
+                                          borderRadius: BorderRadius.horizontal(
+                                            right: Radius.circular(24.r),
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          product.stock <= 0
+                                              ? 'Not Available'
+                                              : 'Go to Cart',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14.sp,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    product.stock <= 0
-                                        ? 'Not Available'
-                                        : 'Go to Cart',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -1149,7 +1429,7 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                '${tier.minQty} pcs',
+                                '${tier.minQty}${tier.maxQty != null ? ' - ${tier.maxQty}' : '+'} pcs',
                                 style: TextStyle(
                                   fontSize: 13.sp,
                                   color: active
@@ -1405,17 +1685,24 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
     );
   }
 
-  Widget _buildBottomIconButton(IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 22.sp, color: Colors.black87),
-        SizedBox(height: 4.h),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11.sp, color: Colors.grey[600]),
-        ),
-      ],
+  Widget _buildBottomIconButton(
+    IconData icon,
+    String label, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22.sp, color: Colors.black87),
+          SizedBox(height: 4.h),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11.sp, color: Colors.grey[600]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1457,6 +1744,128 @@ class _ProductDetailsViewState extends State<ProductDetailsView> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildVariantsSection(ProductModel product) {
+    // Group variants by type
+    final Map<String, List<ProductVariant>> groupedVariants = {};
+    for (var variant in product.variants!) {
+      if (!groupedVariants.containsKey(variant.type)) {
+        groupedVariants[variant.type] = [];
+      }
+      groupedVariants[variant.type]!.add(variant);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: groupedVariants.entries.map((entry) {
+        final String type = entry.key;
+        final List<ProductVariant> variants = entry.value;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(type, style: AppTypography.h3.copyWith(fontSize: 15.sp)),
+            SizedBox(height: 12.h),
+            Wrap(
+              spacing: 10.w,
+              runSpacing: 10.h,
+              children: variants.map((variant) {
+                return Obx(() {
+                  final bool isSelected =
+                      _selectedVariants[type] == variant.value;
+                  return GestureDetector(
+                    onTap: () {
+                      _selectedVariants[type] = variant.value;
+
+                      // SWITCH GALLERY: Create a separate gallery for this variant
+                      final List<String> variantGallery = [];
+                      if (variant.imageUrl != null &&
+                          variant.imageUrl!.isNotEmpty) {
+                        variantGallery.add(variant.imageUrl!);
+                      }
+                      for (var url in variant.galleryUrls) {
+                        if (url.isNotEmpty && !variantGallery.contains(url)) {
+                          variantGallery.add(url);
+                        }
+                      }
+
+                      _selectedVariantForGallery.value = variant;
+                      if (variantGallery.isNotEmpty) {
+                        _activeGallery.assignAll(variantGallery);
+                        _isShowingInitial.value = false;
+                        _pageController.jumpToPage(0);
+                      } else {
+                        // If no images for variant, keep main gallery but highlight this variant
+                        _activeGallery.assignAll(_initialGallery);
+                        _isShowingInitial.value = true;
+                      }
+
+                      // Scroll to top to show the gallery/info
+                      _scrollController.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOut,
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 8.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary.withValues(alpha: 0.1)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8.r),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (variant.imageUrl != null &&
+                              variant.imageUrl!.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.only(right: 8.w),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4.r),
+                                child: CachedNetworkImage(
+                                  imageUrl: variant.imageUrl!,
+                                  width: 20.w,
+                                  height: 20.w,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          Text(
+                            variant.value,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : Colors.black87,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              fontSize: 13.sp,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                });
+              }).toList(),
+            ),
+            SizedBox(height: 20.h),
+          ],
+        );
+      }).toList(),
     );
   }
 

@@ -91,6 +91,20 @@ class StoreView extends GetView<BuyerController> {
                                   ),
                                 ),
                                 const SizedBox(height: 4),
+                                Obx(() {
+                                  final store = controller.store.value;
+                                  if (store?.metadata?['shipping_rates'] !=
+                                      null) {
+                                    return Text(
+                                      'Shipping: ${store?.metadata?['shipping_rates']}',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                }),
                                 Row(
                                   children: [
                                     const Icon(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../core/constants/category_constants.dart';
 import '../../data/models/product.dart';
+import '../../data/models/store.dart';
 import '../../data/repositories/product_repository.dart';
 
 class CartItem {
@@ -16,6 +18,7 @@ class CartItem {
 class BuyerController extends GetxController {
   final ProductRepository _productRepository = ProductRepository();
   final RxList<ProductModel> products = <ProductModel>[].obs;
+  final Rx<StoreModel?> store = Rx<StoreModel?>(null);
   final RxList<ProductModel> featuredProducts = <ProductModel>[].obs;
   final RxList<String> banners = <String>[
     'https://images.unsplash.com/photo-1607082349566-187342175e2f?q=80&w=1000',
@@ -23,17 +26,25 @@ class BuyerController extends GetxController {
     'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000',
   ].obs;
 
-  final categories = [
-    {'name': 'Electronics', 'icon': 'phone_android'},
-    {'name': 'Fashion', 'icon': 'checkroom'},
-    {'name': 'Home', 'icon': 'home'},
-    {'name': 'Beauty', 'icon': 'face'},
-    {'name': 'Toys', 'icon': 'toys'},
-  ].obs;
+  final categories = CategoryConstants.categories
+      .map((c) => {'name': c['name'], 'icon': _getIconString(c['icon'])})
+      .take(8) // Just show top 8 on home row
+      .toList()
+      .obs;
+
+  static String _getIconString(IconData icon) {
+    if (icon == Icons.phone_android) return 'phone_android';
+    if (icon == Icons.checkroom) return 'checkroom';
+    if (icon == Icons.home) return 'home';
+    if (icon == Icons.face) return 'face';
+    if (icon == Icons.toys) return 'toys';
+    return 'category';
+  }
 
   final isLoading = false.obs;
   final RxInt currentIndex = 0.obs;
   final RxInt storeTabIndex = 0.obs;
+  final RxString selectedMainCategory = ''.obs;
   final RxBool swipeHintShown = false.obs;
   final RxBool affiliateModalShown = false.obs;
 
@@ -77,6 +88,9 @@ class BuyerController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    if (CategoryConstants.categoryNames.isNotEmpty) {
+      selectedMainCategory.value = CategoryConstants.categoryNames.first;
+    }
     loadProducts();
 
     // Check for index argument to change page (e.g., to cart)

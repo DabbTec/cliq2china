@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../seller_controller.dart';
 
-class SellerDiscountsView extends StatelessWidget {
+class SellerDiscountsView extends GetView<SellerController> {
   const SellerDiscountsView({super.key});
 
   @override
@@ -26,16 +27,37 @@ class SellerDiscountsView extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _buildPromoCard('FLASH SALE', '20% OFF', 'Active', Colors.orange),
-          _buildPromoCard('WELCOME10', '₦1,000 OFF', 'Scheduled', Colors.blue),
-          _buildPromoCard('BLACK FRIDAY', '50% OFF', 'Expired', Colors.red),
-        ],
-      ),
+      body: Obx(() {
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final promos = controller.promotions;
+        if (promos.isEmpty) {
+          return const Center(child: Text('No promotions created yet'));
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: promos.length,
+          itemBuilder: (context, index) {
+            final promo = promos[index];
+            final status = promo['status'] ?? 'Active';
+            final statusColor = status == 'Active'
+                ? Colors.green
+                : (status == 'Scheduled' ? Colors.blue : Colors.red);
+
+            return _buildPromoCard(
+              promo['code'] ?? 'CODE',
+              promo['value'] ?? '0% OFF',
+              status,
+              statusColor,
+            );
+          },
+        );
+      }),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () {
+          // Create discount logic
+        },
         backgroundColor: Colors.black,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/widgets/buttons.dart';
+import '../../auth/auth_controller.dart';
 
 class ChangePasswordView extends StatefulWidget {
   const ChangePasswordView({super.key});
@@ -28,6 +29,7 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
   @override
   Widget build(BuildContext context) {
+    final authController = Get.find<AuthController>();
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -81,20 +83,20 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                 },
               ),
               const SizedBox(height: 48),
-              PrimaryButton(
-                text: 'Update Password',
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    Get.back();
-                    Get.snackbar(
-                      'Success',
-                      'Password updated successfully',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: Colors.green,
-                      colorText: Colors.white,
-                    );
-                  }
-                },
+              Obx(
+                () => PrimaryButton(
+                  text: 'Update Password',
+                  isLoading: authController.isLoading.value,
+                  onPressed: () async {
+                    if (_formKey.currentState!.validate()) {
+                      final success = await authController.changePassword(
+                        _currentPasswordController.text,
+                        _newPasswordController.text,
+                      );
+                      if (success) Get.back();
+                    }
+                  },
+                ),
               ),
             ],
           ),
