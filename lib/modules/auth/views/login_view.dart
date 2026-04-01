@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/typography.dart';
+import '../../../core/widgets/buttons.dart';
+import '../../../core/widgets/inputs.dart';
 import '../../../core/widgets/password_strength_indicator.dart';
 import 'forgot_password_modal.dart';
 
@@ -127,7 +130,7 @@ class _LoginViewState extends State<LoginView> {
                     child: ElevatedButton(
                       onPressed: _authController.isLoading.value
                           ? null
-                          : () {
+                          : () async {
                               if (_formKey.currentState!.validate()) {
                                 if (isLogin) {
                                   _authController.login(
@@ -136,28 +139,30 @@ class _LoginViewState extends State<LoginView> {
                                     rememberMe: rememberMe,
                                   );
                                 } else {
-                                  if (isBuyer) {
-                                    _authController.signupRole.value = 'buyer';
-                                    _authController.signup(
-                                      name: buyerNameController.text,
-                                      email: buyerEmailController.text,
-                                      password: buyerPasswordController.text,
-                                      phone:
-                                          '$_selectedCountryCode${buyerPhoneController.text}',
-                                      onSuccess: () =>
-                                          setState(() => isLogin = true),
-                                    );
-                                  } else {
-                                    _authController.signupRole.value = 'seller';
-                                    _authController.signup(
-                                      name: businessNameController.text,
-                                      email: businessEmailController.text,
-                                      password: sellerPasswordController.text,
-                                      phone:
-                                          '$_selectedCountryCode${businessPhoneController.text}',
-                                      businessName: businessNameController.text,
-                                      onSuccess: () =>
-                                          setState(() => isLogin = true),
+                                  final email = isBuyer
+                                      ? buyerEmailController.text
+                                      : businessEmailController.text;
+                                  final name = isBuyer
+                                      ? buyerNameController.text
+                                      : businessNameController.text;
+                                  final phone = '$_selectedCountryCode${isBuyer ? buyerPhoneController.text : businessPhoneController.text}';
+                                  final password = isBuyer
+                                      ? buyerPasswordController.text
+                                      : sellerPasswordController.text;
+                                  final businessName = isBuyer
+                                      ? null
+                                      : businessNameController.text;
+                                  final role = isBuyer ? 'buyer' : 'seller';
+
+                                  final success = await _authController.requestVerificationCode(email);
+                                  if (success) {
+                                    _showSignupOtpModal(
+                                      name: name,
+                                      email: email,
+                                      password: password,
+                                      phone: phone,
+                                      businessName: businessName,
+                                      role: role,
                                     );
                                   }
                                 }
@@ -630,6 +635,97 @@ class _LoginViewState extends State<LoginView> {
           },
         ),
       ],
+    );
+  }
+
+  void _showSignupOtpModal({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    String? businessName,
+    required String role,
+  }) {
+    final otpController = TextEditingController();
+
+    Get.bottomSheet(
+      SingleChildScrollView(
+        child: Container(
+          padding: EdgeInsets.only(
+            top: 32,
+            left: 24,
+            right: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Verify Your Email',
+                style: AppTypography.h2.copyWith(color: AppColors.primary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'We sent a 6-digit code to $email. It expires in 10 minutes.',
+                style: AppTypography.bodyMedium,
+              ),
+              const SizedBox(height: 24),
+              CustomTextField(
+                controller: otpController,
+                labelText: '6-Digit Code',
+                hintText: 'Enter code',
+                keyboardType: TextInputType.number,
+                prefixIcon: Icons.verified_user_outlined,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: PrimaryButton(
+                  text: 'Verify & Create Account',
+                  onPressed: () {
+                    if (otpController.text.length < 6) {
+                      Get.snackbar('Error', 'Please enter the full 6-digit code');
+                      return;
+                    }
+                    Get.back();
+                    _authController.signup(
+                      name: name,
+                      email: email,
+                      password: password,
+                      phone: phone,
+                      businessName: businessName,
+                      otpCode: otpController.text,
+                      onSuccess: () => setState(() => isLogin = true),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Get.back();
+                    _authController.requestVerificationCode(email);
+                  },
+                  child: Text(
+                    'Resend Code',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      isScrollControlled: true,
     );
   }
 

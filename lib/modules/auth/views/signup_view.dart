@@ -234,17 +234,14 @@ class _SignupViewState extends State<SignupView> {
                     () => PrimaryButton(
                       text: 'Sign Up',
                       isLoading: controller.isLoading.value,
-                      onPressed: () {
+                      onPressed: () async {
                         if (formKey.currentState!.validate()) {
-                          controller.signup(
-                            name: nameController.text,
-                            email: emailController.text,
-                            password: passwordController.text,
-                            phone:
-                                '${selectedCountryCode.value}${phoneController.text}',
-                            businessName: businessNameController.text,
-                            onSuccess: () => Get.back(),
-                          );
+                          FocusScope.of(context).unfocus();
+                          final email = emailController.text;
+                          final success = await controller.requestVerificationCode(email);
+                          if (success) {
+                            _showOtpVerificationModal();
+                          }
                         }
                       },
                     ),
@@ -314,6 +311,90 @@ class _SignupViewState extends State<SignupView> {
           ],
         ),
       ],
+    );
+  }
+
+  void _showOtpVerificationModal() {
+    final otpController = TextEditingController();
+
+    Get.bottomSheet(
+      Container(
+        padding: EdgeInsets.only(
+          top: 32,
+          left: 24,
+          right: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Verify Your Email',
+              style: AppTypography.h2.copyWith(color: AppColors.primary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'We sent a 6-digit code to ${emailController.text}. It expires in 10 minutes.',
+              style: AppTypography.bodyMedium,
+            ),
+            const SizedBox(height: 24),
+            CustomTextField(
+              controller: otpController,
+              labelText: '6-Digit Code',
+              hintText: 'Enter code',
+              keyboardType: TextInputType.number,
+              prefixIcon: Icons.verified_user_outlined,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: PrimaryButton(
+                text: 'Verify & Create Account',
+                onPressed: () {
+                  if (otpController.text.length < 6) {
+                    Get.snackbar('Error', 'Please enter the full 6-digit code');
+                    return;
+                  }
+
+                  Get.back();
+
+                  controller.signup(
+                    name: nameController.text,
+                    email: emailController.text,
+                    password: passwordController.text,
+                    phone: '${selectedCountryCode.value}${phoneController.text}',
+                    businessName: businessNameController.text,
+                    otpCode: otpController.text,
+                    onSuccess: () => Get.back(),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  Get.back();
+                  controller.requestVerificationCode(emailController.text);
+                },
+                child: Text(
+                  'Resend Code',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
     );
   }
 }

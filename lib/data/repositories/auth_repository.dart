@@ -21,7 +21,7 @@ class AuthRepository {
     }
   }
 
-  Future<UserModel> signup(UserModel user, String password) async {
+  Future<UserModel> signup(UserModel user, String password, {String? otpCode}) async {
     final userData = user.toJson();
     userData.remove('id');
     userData.remove('referral_code');
@@ -31,9 +31,15 @@ class AuthRepository {
     userData.remove('cac_number'); // Not needed for signup yet
     userData.remove('bank_details'); // Not needed for signup yet
 
+    final payload = Map<String, dynamic>.from(userData)
+      ..['password'] = password;
+    if (otpCode != null) {
+      payload['otp_code'] = otpCode;
+    }
+
     final response = await _apiService.post(
       ApiEndpoints.signup,
-      data: {...userData, 'password': password},
+      data: payload,
     );
 
     final data = response.data;
@@ -96,7 +102,7 @@ class AuthRepository {
       ApiEndpoints.resetPassword,
       data: {
         'email': email.trim().toLowerCase(),
-        'verification_code': verificationCode.trim(),
+        'code': verificationCode.trim(),
         'new_password': newPassword,
       },
     );

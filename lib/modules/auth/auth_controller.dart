@@ -7,6 +7,7 @@ import '../buyer/buyer_controller.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../core/services/token_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/constants/api_endpoints.dart';
 import '../../core/services/app_update_service.dart';
 import '../../routes/app_pages.dart';
 import '../../core/utils/exceptions.dart';
@@ -146,11 +147,52 @@ class AuthController extends GetxController {
     Get.offAllNamed(Routes.buyerDashboard); // Go back to guest marketplace
   }
 
+  Future<bool> requestVerificationCode(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    isLoading.value = true;
+    try {
+      final response = await Get.find<ApiService>().post(
+        ApiEndpoints.sendVerification,
+        data: {'email': normalizedEmail},
+      );
+      if (response.statusCode == 200) {
+        Get.snackbar(
+          'Email Sent',
+          'Please check your inbox for the 6-digit verification code.',
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: Colors.blue.withValues(alpha: 0.1),
+          colorText: Colors.blue[800],
+        );
+        return true;
+      }
+      return false;
+    } on DioException catch (e) {
+      String message = 'Failed to send verification code';
+      if (e.response?.data != null && e.response?.data is Map) {
+        message = e.response?.data['message'] ?? message;
+      }
+      Get.snackbar(
+        'Error',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.1),
+        colorText: Colors.red[800],
+      );
+      return false;
+    } catch (e) {
+      Get.snackbar('Error', 'An unexpected error occurred');
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   Future<void> signup({
     required String name,
     required String email,
     required String password,
     required String phone,
+    String? otpCode,
     String? address,
     String? businessName,
     String? cacNumber,
@@ -173,7 +215,7 @@ class AuthController extends GetxController {
         bankDetails: bankDetails,
         referralCode: referralCode,
       );
-      await _authRepository.signup(newUser, password);
+      await _authRepository.signup(newUser, password, otpCode: otpCode);
 
       Get.snackbar(
         'Welcome aboard!',

@@ -14,6 +14,7 @@ class ApiEndpoints {
   static const String signup = 'auth/signup/';
   static const String profile = 'auth/profile/';
   static const String tokenRefresh = 'auth/token/refresh/';
+  static const String sendVerification = 'auth/send-verification/';
   static const String changePassword = 'auth/change-password/';
   static const String forgotPassword = 'auth/forgot-password/';
   static const String resetPassword = 'auth/reset-password/';
