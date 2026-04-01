@@ -238,7 +238,8 @@ class _SignupViewState extends State<SignupView> {
                         if (formKey.currentState!.validate()) {
                           FocusScope.of(context).unfocus();
                           final email = emailController.text;
-                          final success = await controller.requestVerificationCode(email);
+                          final success = await controller
+                              .requestVerificationCode(email);
                           if (success) {
                             _showOtpVerificationModal();
                           }
@@ -367,7 +368,8 @@ class _SignupViewState extends State<SignupView> {
                     name: nameController.text,
                     email: emailController.text,
                     password: passwordController.text,
-                    phone: '${selectedCountryCode.value}${phoneController.text}',
+                    phone:
+                        '${selectedCountryCode.value}${phoneController.text}',
                     businessName: businessNameController.text,
                     otpCode: otpController.text,
                     onSuccess: () => Get.back(),

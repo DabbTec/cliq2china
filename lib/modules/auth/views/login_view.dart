@@ -145,7 +145,8 @@ class _LoginViewState extends State<LoginView> {
                                   final name = isBuyer
                                       ? buyerNameController.text
                                       : businessNameController.text;
-                                  final phone = '$_selectedCountryCode${isBuyer ? buyerPhoneController.text : businessPhoneController.text}';
+                                  final phone =
+                                      '$_selectedCountryCode${isBuyer ? buyerPhoneController.text : businessPhoneController.text}';
                                   final password = isBuyer
                                       ? buyerPasswordController.text
                                       : sellerPasswordController.text;
@@ -154,7 +155,8 @@ class _LoginViewState extends State<LoginView> {
                                       : businessNameController.text;
                                   final role = isBuyer ? 'buyer' : 'seller';
 
-                                  final success = await _authController.requestVerificationCode(email);
+                                  final success = await _authController
+                                      .requestVerificationCode(email);
                                   if (success) {
                                     _showSignupOtpModal(
                                       name: name,
@@ -689,7 +691,10 @@ class _LoginViewState extends State<LoginView> {
                   text: 'Verify & Create Account',
                   onPressed: () {
                     if (otpController.text.length < 6) {
-                      Get.snackbar('Error', 'Please enter the full 6-digit code');
+                      Get.snackbar(
+                        'Error',
+                        'Please enter the full 6-digit code',
+                      );
                       return;
                     }
                     Get.back();
